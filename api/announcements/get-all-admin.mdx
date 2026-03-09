@@ -1,0 +1,178 @@
+---
+title: 'Get All Announcements (Admin)'
+api: 'GET /api/comunicados/admin'
+description: 'Retrieve all announcements including inactive and draft announcements (Admin only)'
+---
+
+## Overview
+
+This admin-only endpoint retrieves all announcements in the system, including both active (published) and inactive (draft) announcements. This is useful for managing the announcement lifecycle.
+
+## Authentication
+
+Requires JWT authentication token with Admin or Super Admin role.
+
+## Authorization
+
+<Card title="Admin Access Required" icon="lock">
+  Only users with Admin or Super Admin roles can access this endpoint. Regular employees can only see active announcements via the public endpoint.
+</Card>
+
+## Response
+
+Returns an array of all announcement objects.
+
+<ResponseField name="response" type="array">
+  Array of announcement objects
+  
+  <ResponseField name="id_comunicado" type="integer">
+    Unique announcement identifier
+  </ResponseField>
+  
+  <ResponseField name="titulo" type="string">
+    Announcement title
+  </ResponseField>
+  
+  <ResponseField name="contenido" type="string">
+    Announcement content/body
+  </ResponseField>
+  
+  <ResponseField name="fecha_publicacion" type="string">
+    Publication date (YYYY-MM-DD HH:mm:ss)
+  </ResponseField>
+  
+  <ResponseField name="activo" type="boolean">
+    Whether the announcement is active/published (true) or draft/hidden (false)
+  </ResponseField>
+  
+  <ResponseField name="media_url" type="string">
+    URL to associated media file (image, document, etc.)
+  </ResponseField>
+  
+  <ResponseField name="fecha_creacion" type="string">
+    Creation timestamp
+  </ResponseField>
+  
+  <ResponseField name="fecha_actualizacion" type="string">
+    Last update timestamp
+  </ResponseField>
+</ResponseField>
+
+## Error Responses
+
+<ResponseField name="500" type="object">
+  Internal server error
+  ```json
+  {
+    "message": "Error interno del servidor."
+  }
+  ```
+</ResponseField>
+
+## Code Examples
+
+```bash cURL
+curl -X GET 'https://api.example.com/api/comunicados/admin' \
+  -H 'Authorization: Bearer YOUR_JWT_TOKEN'
+```
+
+```javascript JavaScript
+const response = await fetch('https://api.example.com/api/comunicados/admin', {
+  method: 'GET',
+  headers: {
+    'Authorization': 'Bearer YOUR_JWT_TOKEN',
+    'Content-Type': 'application/json'
+  }
+});
+
+const announcements = await response.json();
+console.log(`Total announcements: ${announcements.length}`);
+
+// Filter active vs inactive
+const active = announcements.filter(a => a.activo);
+const drafts = announcements.filter(a => !a.activo);
+console.log(`Active: ${active.length}, Drafts: ${drafts.length}`);
+```
+
+```python Python
+import requests
+
+url = 'https://api.example.com/api/comunicados/admin'
+headers = {
+    'Authorization': 'Bearer YOUR_JWT_TOKEN',
+    'Content-Type': 'application/json'
+}
+
+response = requests.get(url, headers=headers)
+announcements = response.json()
+
+print(f"Total announcements: {len(announcements)}")
+
+# Separate active and inactive
+active = [a for a in announcements if a['activo']]
+drafts = [a for a in announcements if not a['activo']]
+
+print(f"Active: {len(active)}, Drafts: {len(drafts)}")
+```
+
+## Example Response
+
+```json
+[
+  {
+    "id_comunicado": 1,
+    "titulo": "Nuevo horario de verano",
+    "contenido": "A partir del 1 de abril, el horario de oficina será de 8:00 a 15:00.",
+    "fecha_publicacion": "2026-03-01 09:00:00",
+    "activo": true,
+    "media_url": "https://api.example.com/uploads/comunicados/horario-verano.pdf",
+    "fecha_creacion": "2026-02-25 10:30:00",
+    "fecha_actualizacion": "2026-02-28 14:20:00"
+  },
+  {
+    "id_comunicado": 2,
+    "titulo": "[BORRADOR] Política de trabajo remoto",
+    "contenido": "Se está revisando la nueva política...",
+    "fecha_publicacion": null,
+    "activo": false,
+    "media_url": null,
+    "fecha_creacion": "2026-03-05 11:15:00",
+    "fecha_actualizacion": "2026-03-08 16:45:00"
+  },
+  {
+    "id_comunicado": 3,
+    "titulo": "Celebración aniversario empresa",
+    "contenido": "El próximo viernes celebraremos el 10º aniversario de la empresa.",
+    "fecha_publicacion": "2026-03-10 08:00:00",
+    "activo": true,
+    "media_url": "https://api.example.com/uploads/comunicados/aniversario.jpg",
+    "fecha_creacion": "2026-03-08 09:00:00",
+    "fecha_actualizacion": "2026-03-08 09:00:00"
+  }
+]
+```
+
+## Use Cases
+
+<CardGroup cols={2}>
+  <Card title="Content Management" icon="pen-to-square">
+    View all announcements (active and drafts) to manage the content lifecycle
+  </Card>
+  <Card title="Draft Review" icon="eye">
+    Review unpublished announcements before making them active
+  </Card>
+  <Card title="Archive Management" icon="box-archive">
+    Access inactive announcements for historical records or reactivation
+  </Card>
+  <Card title="Bulk Operations" icon="list-check">
+    Retrieve all announcements for bulk update or deletion operations
+  </Card>
+</CardGroup>
+
+## Related Endpoints
+
+- **GET /api/comunicados** - Get only active announcements (public endpoint for all authenticated users)
+- **GET /api/comunicados/:id** - Get specific announcement by ID
+- **POST /api/comunicados/admin** - Create new announcement
+- **PUT /api/comunicados/admin/:id** - Update announcement
+- **DELETE /api/comunicados/admin/:id** - Delete announcement

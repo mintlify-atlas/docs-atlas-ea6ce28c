@@ -1,0 +1,248 @@
+---
+title: 'Get Pending Requests'
+api: 'GET /api/solicitudes/admin/pendientes'
+description: 'Retrieve all pending requests awaiting approval (Admin only)'
+---
+
+## Overview
+
+This admin-only endpoint retrieves all requests with "Pendiente" (Pending) status. It returns paginated results with support for filtering by type, search, and date range.
+
+## Authentication
+
+Requires JWT authentication token with Admin or Super Admin role.
+
+## Authorization
+
+<Card title="Admin Access Required" icon="lock">
+  Only users with Admin or Super Admin roles can access this endpoint
+</Card>
+
+## Query Parameters
+
+<ParamField query="page" type="integer" default="1">
+  Page number for pagination
+</ParamField>
+
+<ParamField query="limit" type="integer" default="25">
+  Number of records per page
+</ParamField>
+
+<ParamField query="id_tipo" type="integer">
+  Filter by request type ID (optional)
+</ParamField>
+
+<ParamField query="search" type="string">
+  Search by employee name or ID (optional)
+</ParamField>
+
+<ParamField query="start_date" type="string">
+  Filter by start date (YYYY-MM-DD format, optional)
+</ParamField>
+
+<ParamField query="end_date" type="string">
+  Filter by end date (YYYY-MM-DD format, optional)
+</ParamField>
+
+## Response
+
+Returns paginated pending requests with employee and type information.
+
+<ResponseField name="status" type="string">
+  Response status ("success")
+</ResponseField>
+
+<ResponseField name="data" type="object">
+  Response data container
+  
+  <ResponseField name="solicitudes" type="array">
+    Array of pending request objects
+    
+    <ResponseField name="id_solicitud" type="integer">
+      Request ID
+    </ResponseField>
+    
+    <ResponseField name="id_empleado" type="integer">
+      Employee ID
+    </ResponseField>
+    
+    <ResponseField name="fecha_inicio" type="string">
+      Start date
+    </ResponseField>
+    
+    <ResponseField name="fecha_fin" type="string">
+      End date
+    </ResponseField>
+    
+    <ResponseField name="dias_solicitados" type="integer">
+      Days requested
+    </ResponseField>
+    
+    <ResponseField name="descripcion_solicitud" type="string">
+      Request description
+    </ResponseField>
+    
+    <ResponseField name="fecha_creacion" type="string">
+      Creation timestamp
+    </ResponseField>
+    
+    <ResponseField name="empleado_solicitante" type="object">
+      Employee information
+      <ResponseField name="nombre" type="string">
+        Employee name
+      </ResponseField>
+      <ResponseField name="correo" type="string">
+        Employee email
+      </ResponseField>
+      <ResponseField name="dni" type="string">
+        Employee DNI
+      </ResponseField>
+    </ResponseField>
+    
+    <ResponseField name="tipo_solicitud" type="object">
+      Request type
+      <ResponseField name="tipo" type="string">
+        Type name
+      </ResponseField>
+    </ResponseField>
+    
+    <ResponseField name="estado_solicitud" type="object">
+      Request status
+      <ResponseField name="estado" type="string">
+        Status (always "Pendiente")
+      </ResponseField>
+    </ResponseField>
+  </ResponseField>
+  
+  <ResponseField name="pagination" type="object">
+    Pagination metadata
+    
+    <ResponseField name="total" type="integer">
+      Total number of pending requests
+    </ResponseField>
+    
+    <ResponseField name="page" type="integer">
+      Current page number
+    </ResponseField>
+    
+    <ResponseField name="limit" type="integer">
+      Records per page
+    </ResponseField>
+    
+    <ResponseField name="totalPages" type="integer">
+      Total pages available
+    </ResponseField>
+  </ResponseField>
+</ResponseField>
+
+## Error Responses
+
+<ResponseField name="500" type="object">
+  Internal server error
+  ```json
+  {
+    "message": "Error interno del servidor"
+  }
+  ```
+</ResponseField>
+
+## Code Examples
+
+```bash cURL
+curl -X GET 'https://api.example.com/api/solicitudes/admin/pendientes?page=1&limit=25' \
+  -H 'Authorization: Bearer YOUR_JWT_TOKEN'
+```
+
+```javascript JavaScript
+const response = await fetch(
+  'https://api.example.com/api/solicitudes/admin/pendientes?page=1&limit=25&id_tipo=1',
+  {
+    method: 'GET',
+    headers: {
+      'Authorization': 'Bearer YOUR_JWT_TOKEN',
+      'Content-Type': 'application/json'
+    }
+  }
+);
+
+const data = await response.json();
+console.log(`Total pending: ${data.data.pagination.total}`);
+console.log(data.data.solicitudes);
+```
+
+```python Python
+import requests
+
+url = 'https://api.example.com/api/solicitudes/admin/pendientes'
+params = {
+    'page': 1,
+    'limit': 25,
+    'id_tipo': 1,
+    'search': 'Juan'
+}
+headers = {
+    'Authorization': 'Bearer YOUR_JWT_TOKEN',
+    'Content-Type': 'application/json'
+}
+
+response = requests.get(url, params=params, headers=headers)
+data = response.json()
+print(f"Total pending: {data['data']['pagination']['total']}")
+for solicitud in data['data']['solicitudes']:
+    print(f"{solicitud['empleado_solicitante']['nombre']}: {solicitud['tipo_solicitud']['tipo']}")
+```
+
+## Example Response
+
+```json
+{
+  "status": "success",
+  "data": {
+    "solicitudes": [
+      {
+        "id_solicitud": 42,
+        "id_empleado": 15,
+        "fecha_inicio": "2026-03-20 00:00:00",
+        "fecha_fin": "2026-03-24 00:00:00",
+        "dias_solicitados": 5,
+        "descripcion_solicitud": "Vacaciones de primavera",
+        "fecha_creacion": "2026-03-09 08:30:00",
+        "empleado_solicitante": {
+          "nombre": "María García",
+          "correo": "maria.garcia@example.com",
+          "dni": "12345678A"
+        },
+        "tipo_solicitud": {
+          "tipo": "Vacaciones"
+        },
+        "estado_solicitud": {
+          "estado": "Pendiente"
+        }
+      }
+    ],
+    "pagination": {
+      "total": 12,
+      "page": 1,
+      "limit": 25,
+      "totalPages": 1
+    }
+  }
+}
+```
+
+## Use Cases
+
+<CardGroup cols={2}>
+  <Card title="Approval Queue" icon="list-check">
+    Display all pending requests in an admin dashboard for quick review and approval
+  </Card>
+  <Card title="Filtered Review" icon="filter">
+    Filter by request type to process specific categories (e.g., vacation requests only)
+  </Card>
+  <Card title="Search Employees" icon="magnifying-glass">
+    Search for pending requests from specific employees
+  </Card>
+  <Card title="Date-based Review" icon="calendar">
+    Filter by date range to review requests submitted in a specific period
+  </Card>
+</CardGroup>

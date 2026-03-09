@@ -1,0 +1,351 @@
+---
+title: 'File Upload Endpoints'
+description: 'Upload files for requests, announcements, and documents'
+---
+
+## Overview
+
+The upload endpoints allow authenticated users to upload files to the system. There are three dedicated endpoints, each configured for specific file types and storage locations:
+
+1. **Solicitud (Request)** - For supporting documents attached to requests
+2. **Comunicado (Announcement)** - For media files in announcements (Admin only)
+3. **Documento (Document)** - For general administrative documents (Admin only)
+
+## Authentication
+
+All upload endpoints require JWT authentication. Admin-specific endpoints additionally require Admin or Super Admin role.
+
+---
+
+## POST /api/uploads/solicitud
+
+Upload supporting documents for employee requests (vacation requests, permission requests, etc.).
+
+### Authorization
+
+<Card title="All Authenticated Users" icon="users">
+  Any authenticated employee can upload files for their own requests
+</Card>
+
+### Request
+
+**Content-Type:** `multipart/form-data`
+
+<ParamField body="file" type="file" required>
+  File to upload. Accepted file types and size limits are configured in the middleware.
+</ParamField>
+
+### Response
+
+<ResponseField name="success" type="boolean">
+  Whether the upload succeeded
+</ResponseField>
+
+<ResponseField name="message" type="string">
+  Success or error message
+</ResponseField>
+
+<ResponseField name="url" type="string">
+  Public URL to access the uploaded file. Format: `{BASE_URL}/uploads/solicitudes/{filename}`
+</ResponseField>
+
+### Code Examples
+
+```bash cURL
+curl -X POST 'https://api.example.com/api/uploads/solicitud' \
+  -H 'Authorization: Bearer YOUR_JWT_TOKEN' \
+  -F 'file=@/path/to/document.pdf'
+```
+
+```javascript JavaScript
+const formData = new FormData();
+formData.append('file', fileInput.files[0]);
+
+const response = await fetch('https://api.example.com/api/uploads/solicitud', {
+  method: 'POST',
+  headers: {
+    'Authorization': 'Bearer YOUR_JWT_TOKEN'
+  },
+  body: formData
+});
+
+const result = await response.json();
+if (result.success) {
+  console.log('File uploaded:', result.url);
+}
+```
+
+```python Python
+import requests
+
+url = 'https://api.example.com/api/uploads/solicitud'
+headers = {'Authorization': 'Bearer YOUR_JWT_TOKEN'}
+files = {'file': open('document.pdf', 'rb')}
+
+response = requests.post(url, headers=headers, files=files)
+result = response.json()
+
+if result['success']:
+    print(f"File uploaded: {result['url']}")
+```
+
+### Example Response
+
+```json
+{
+  "success": true,
+  "message": "Archivo subido con éxito.",
+  "url": "https://api.example.com/uploads/solicitudes/1710234567890-document.pdf"
+}
+```
+
+---
+
+## POST /api/uploads/comunicado
+
+Upload media files for announcements (images, PDFs, etc.).
+
+### Authorization
+
+<Card title="Admin Access Required" icon="lock">
+  Only Admin and Super Admin users can upload announcement media
+</Card>
+
+### Request
+
+**Content-Type:** `multipart/form-data`
+
+<ParamField body="file" type="file" required>
+  Media file to upload (image, PDF, etc.)
+</ParamField>
+
+### Response
+
+<ResponseField name="success" type="boolean">
+  Whether the upload succeeded
+</ResponseField>
+
+<ResponseField name="message" type="string">
+  Success or error message
+</ResponseField>
+
+<ResponseField name="url" type="string">
+  Public URL to access the uploaded file. Format: `{BASE_URL}/uploads/comunicados/{filename}`
+</ResponseField>
+
+### Code Examples
+
+```bash cURL
+curl -X POST 'https://api.example.com/api/uploads/comunicado' \
+  -H 'Authorization: Bearer YOUR_ADMIN_JWT_TOKEN' \
+  -F 'file=@/path/to/announcement-image.jpg'
+```
+
+```javascript JavaScript
+const formData = new FormData();
+formData.append('file', imageFile);
+
+const response = await fetch('https://api.example.com/api/uploads/comunicado', {
+  method: 'POST',
+  headers: {
+    'Authorization': 'Bearer YOUR_ADMIN_JWT_TOKEN'
+  },
+  body: formData
+});
+
+const result = await response.json();
+if (result.success) {
+  console.log('Announcement media uploaded:', result.url);
+}
+```
+
+```python Python
+import requests
+
+url = 'https://api.example.com/api/uploads/comunicado'
+headers = {'Authorization': 'Bearer YOUR_ADMIN_JWT_TOKEN'}
+files = {'file': open('announcement-image.jpg', 'rb')}
+
+response = requests.post(url, headers=headers, files=files)
+result = response.json()
+
+if result['success']:
+    print(f"Media uploaded: {result['url']}")
+```
+
+### Example Response
+
+```json
+{
+  "success": true,
+  "message": "Archivo subido con éxito.",
+  "url": "https://api.example.com/uploads/comunicados/1710234567890-announcement-image.jpg"
+}
+```
+
+---
+
+## POST /api/uploads/documento
+
+Upload general administrative documents.
+
+### Authorization
+
+<Card title="Admin Access Required" icon="lock">
+  Only Admin and Super Admin users can upload administrative documents
+</Card>
+
+### Request
+
+**Content-Type:** `multipart/form-data`
+
+<ParamField body="file" type="file" required>
+  Document file to upload
+</ParamField>
+
+### Response
+
+<ResponseField name="success" type="boolean">
+  Whether the upload succeeded
+</ResponseField>
+
+<ResponseField name="message" type="string">
+  Success or error message
+</ResponseField>
+
+<ResponseField name="url" type="string">
+  Public URL to access the uploaded file. Format: `{BASE_URL}/uploads/documentos/{filename}`
+</ResponseField>
+
+### Code Examples
+
+```bash cURL
+curl -X POST 'https://api.example.com/api/uploads/documento' \
+  -H 'Authorization: Bearer YOUR_ADMIN_JWT_TOKEN' \
+  -F 'file=@/path/to/policy-document.pdf'
+```
+
+```javascript JavaScript
+const formData = new FormData();
+formData.append('file', documentFile);
+
+const response = await fetch('https://api.example.com/api/uploads/documento', {
+  method: 'POST',
+  headers: {
+    'Authorization': 'Bearer YOUR_ADMIN_JWT_TOKEN'
+  },
+  body: formData
+});
+
+const result = await response.json();
+if (result.success) {
+  console.log('Document uploaded:', result.url);
+}
+```
+
+```python Python
+import requests
+
+url = 'https://api.example.com/api/uploads/documento'
+headers = {'Authorization': 'Bearer YOUR_ADMIN_JWT_TOKEN'}
+files = {'file': open('policy-document.pdf', 'rb')}
+
+response = requests.post(url, headers=headers, files=files)
+result = response.json()
+
+if result['success']:
+    print(f"Document uploaded: {result['url']}")
+```
+
+### Example Response
+
+```json
+{
+  "success": true,
+  "message": "Archivo subido con éxito.",
+  "url": "https://api.example.com/uploads/documentos/1710234567890-policy-document.pdf"
+}
+```
+
+---
+
+## Error Responses
+
+All upload endpoints return the same error format:
+
+<ResponseField name="400" type="object">
+  No file attached or invalid file
+  ```json
+  {
+    "success": false,
+    "message": "No se adjuntó ningún archivo o el archivo no es válido."
+  }
+  ```
+</ResponseField>
+
+<ResponseField name="403" type="object">
+  Forbidden (for admin-only endpoints)
+  ```json
+  {
+    "message": "No tienes permisos para acceder a este recurso."
+  }
+  ```
+</ResponseField>
+
+<ResponseField name="500" type="object">
+  Internal server error
+  ```json
+  {
+    "success": false,
+    "message": "Error interno al procesar el archivo subido."
+  }
+  ```
+</ResponseField>
+
+---
+
+## Storage Locations
+
+<CardGroup cols={3}>
+  <Card title="Solicitudes" icon="folder">
+    `public/uploads/solicitudes/`
+    
+    Request supporting documents
+  </Card>
+  <Card title="Comunicados" icon="folder">
+    `public/uploads/comunicados/`
+    
+    Announcement media files
+  </Card>
+  <Card title="Documentos" icon="folder">
+    `public/uploads/documentos/`
+    
+    Administrative documents
+  </Card>
+</CardGroup>
+
+## Implementation Notes
+
+- Files are processed by Multer middleware configured in `uploadMiddleware.js`
+- Each endpoint has its own Multer configuration:
+  - `uploadSolicitud` - For request documents
+  - `uploadComunicado` - For announcement media
+  - `uploadDocumento` - For administrative documents
+- File naming: Timestamp prefix is added to prevent name collisions (e.g., `1710234567890-filename.pdf`)
+- The `BASE_URL` environment variable determines the full URL returned
+- Files are stored in the `public/uploads/` directory and served as static assets
+- File type restrictions and size limits are configured in the respective middleware
+
+## Usage Workflow
+
+<CardGroup cols={3}>
+  <Card title="1. Upload File" icon="upload">
+    Call the appropriate upload endpoint with the file
+  </Card>
+  <Card title="2. Receive URL" icon="link">
+    Get the public URL from the response
+  </Card>
+  <Card title="3. Store Reference" icon="database">
+    Save the URL in your request/announcement/document record
+  </Card>
+</CardGroup>

@@ -1,0 +1,307 @@
+---
+title: 'Request Distribution'
+api: 'GET /api/dashboard-admin/distribucion'
+description: 'Get request distribution statistics by type and status'
+---
+
+## Overview
+
+This endpoint returns request distribution analytics, showing breakdowns by request type and by status. It can be filtered by time range and scoped to a specific employee or organization-wide.
+
+## Authentication
+
+Requires JWT authentication token. Typically used by admins for analytics dashboards.
+
+## Query Parameters
+
+<ParamField query="rango" type="string">
+  Time range filter. Supported values:
+  - `mes_actual` - Current month only
+  - Omit parameter for all-time data
+</ParamField>
+
+<ParamField query="empleado_id" type="integer">
+  Optional employee ID. If provided, returns distribution for that employee only. If omitted, returns organization-wide distribution.
+</ParamField>
+
+## Response
+
+<ResponseField name="status" type="string">
+  Response status ("success")
+</ResponseField>
+
+<ResponseField name="data" type="object">
+  Distribution data object
+  
+  <ResponseField name="por_tipo" type="array">
+    Array of request counts grouped by type
+    
+    <ResponseField name="id_tipo" type="integer">
+      Request type ID
+    </ResponseField>
+    
+    <ResponseField name="nombre" type="string">
+      Request type name (e.g., "Vacaciones", "Permiso", "Ausencia", "Trabajo Exterior")
+    </ResponseField>
+    
+    <ResponseField name="total" type="integer">
+      Count of requests for this type
+    </ResponseField>
+  </ResponseField>
+  
+  <ResponseField name="por_estado" type="array">
+    Array of request counts grouped by status
+    
+    <ResponseField name="id_estado" type="integer">
+      Request status ID
+    </ResponseField>
+    
+    <ResponseField name="nombre" type="string">
+      Request status name (e.g., "Pendiente", "Aprobada", "Rechazada", "Cancelada")
+    </ResponseField>
+    
+    <ResponseField name="total" type="integer">
+      Count of requests with this status
+    </ResponseField>
+  </ResponseField>
+</ResponseField>
+
+## Error Responses
+
+<ResponseField name="500" type="object">
+  Internal server error
+  ```json
+  {
+    "status": "error",
+    "message": "Error al obtener distribución."
+  }
+  ```
+</ResponseField>
+
+## Code Examples
+
+### All-time Organization Distribution
+
+```bash cURL
+curl -X GET 'https://api.example.com/api/dashboard-admin/distribucion' \
+  -H 'Authorization: Bearer YOUR_JWT_TOKEN'
+```
+
+```javascript JavaScript
+// Get all-time organization-wide distribution
+const response = await fetch('https://api.example.com/api/dashboard-admin/distribucion', {
+  method: 'GET',
+  headers: {
+    'Authorization': 'Bearer YOUR_JWT_TOKEN',
+    'Content-Type': 'application/json'
+  }
+});
+
+const distribution = await response.json();
+
+// Display distribution by type
+console.log('By Type:');
+distribution.data.por_tipo.forEach(item => {
+  console.log(`  ${item.nombre}: ${item.total}`);
+});
+
+// Display distribution by status
+console.log('\nBy Status:');
+distribution.data.por_estado.forEach(item => {
+  console.log(`  ${item.nombre}: ${item.total}`);
+});
+```
+
+```python Python
+import requests
+
+# All-time organization distribution
+url = 'https://api.example.com/api/dashboard-admin/distribucion'
+headers = {
+    'Authorization': 'Bearer YOUR_JWT_TOKEN',
+    'Content-Type': 'application/json'
+}
+
+response = requests.get(url, headers=headers)
+data = response.json()['data']
+
+print('Distribution by Type:')
+for item in data['por_tipo']:
+    print(f"  {item['nombre']}: {item['total']}")
+
+print('\nDistribution by Status:')
+for item in data['por_estado']:
+    print(f"  {item['nombre']}: {item['total']}")
+```
+
+### Current Month Employee Distribution
+
+```bash cURL
+curl -X GET 'https://api.example.com/api/dashboard-admin/distribucion?rango=mes_actual&empleado_id=42' \
+  -H 'Authorization: Bearer YOUR_JWT_TOKEN'
+```
+
+```javascript JavaScript
+// Get current month distribution for specific employee
+const employeeId = 42;
+const response = await fetch(
+  `https://api.example.com/api/dashboard-admin/distribucion?rango=mes_actual&empleado_id=${employeeId}`,
+  {
+    method: 'GET',
+    headers: {
+      'Authorization': 'Bearer YOUR_JWT_TOKEN',
+      'Content-Type': 'application/json'
+    }
+  }
+);
+
+const distribution = await response.json();
+console.log('Current month distribution:', distribution.data);
+```
+
+```python Python
+import requests
+
+# Current month employee distribution
+employee_id = 42
+url = 'https://api.example.com/api/dashboard-admin/distribucion'
+params = {
+    'rango': 'mes_actual',
+    'empleado_id': employee_id
+}
+headers = {
+    'Authorization': 'Bearer YOUR_JWT_TOKEN',
+    'Content-Type': 'application/json'
+}
+
+response = requests.get(url, params=params, headers=headers)
+data = response.json()['data']
+
+print(f"Distribution for employee {employee_id} (current month):")
+print(f"By type: {data['por_tipo']}")
+print(f"By status: {data['por_estado']}")
+```
+
+## Example Responses
+
+### Organization-wide All-time Distribution
+
+```json
+{
+  "status": "success",
+  "data": {
+    "por_tipo": [
+      {
+        "id_tipo": 1,
+        "nombre": "Vacaciones",
+        "total": 245
+      },
+      {
+        "id_tipo": 2,
+        "nombre": "Permiso",
+        "total": 132
+      },
+      {
+        "id_tipo": 3,
+        "nombre": "Ausencia",
+        "total": 78
+      },
+      {
+        "id_tipo": 4,
+        "nombre": "Trabajo Exterior",
+        "total": 56
+      }
+    ],
+    "por_estado": [
+      {
+        "id_estado": 1,
+        "nombre": "Pendiente",
+        "total": 23
+      },
+      {
+        "id_estado": 2,
+        "nombre": "Aprobada",
+        "total": 412
+      },
+      {
+        "id_estado": 3,
+        "nombre": "Rechazada",
+        "total": 45
+      },
+      {
+        "id_estado": 4,
+        "nombre": "Cancelada",
+        "total": 31
+      }
+    ]
+  }
+}
+```
+
+### Employee Current Month Distribution
+
+```json
+{
+  "status": "success",
+  "data": {
+    "por_tipo": [
+      {
+        "id_tipo": 1,
+        "nombre": "Vacaciones",
+        "total": 1
+      },
+      {
+        "id_tipo": 2,
+        "nombre": "Permiso",
+        "total": 2
+      }
+    ],
+    "por_estado": [
+      {
+        "id_estado": 1,
+        "nombre": "Pendiente",
+        "total": 1
+      },
+      {
+        "id_estado": 2,
+        "nombre": "Aprobada",
+        "total": 2
+      }
+    ]
+  }
+}
+```
+
+## Visualization Examples
+
+<CardGroup cols={2}>
+  <Card title="Pie Chart by Type" icon="chart-pie">
+    Use `por_tipo` data to create a pie chart showing the composition of request types
+  </Card>
+  <Card title="Bar Chart by Status" icon="chart-column">
+    Use `por_estado` data to create a bar chart showing approval rates and pending volumes
+  </Card>
+  <Card title="Stacked Chart" icon="chart-bar">
+    Combine both datasets to show request types broken down by status
+  </Card>
+  <Card title="Comparison View" icon="code-compare">
+    Compare current month vs all-time distributions to identify trends
+  </Card>
+</CardGroup>
+
+## Use Cases
+
+<CardGroup cols={2}>
+  <Card title="Analytics Dashboard" icon="chart-mixed">
+    Display distribution charts on admin dashboard for insights into request patterns
+  </Card>
+  <Card title="Resource Planning" icon="users-gear">
+    Understand which request types are most common to plan resources accordingly
+  </Card>
+  <Card title="Approval Metrics" icon="percentage">
+    Calculate approval rates by comparing approved vs rejected/cancelled counts
+  </Card>
+  <Card title="Employee Reports" icon="file-chart-column">
+    Generate employee-specific reports showing their request history breakdown
+  </Card>
+</CardGroup>

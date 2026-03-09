@@ -1,0 +1,220 @@
+---
+title: 'Dashboard KPIs'
+api: 'GET /api/dashboard-admin/kpis'
+description: 'Retrieve key performance indicators for admin dashboard or specific employee'
+---
+
+## Overview
+
+This endpoint returns key performance indicators (KPIs) for the admin dashboard. It can provide organization-wide metrics or employee-specific metrics depending on the query parameters.
+
+## Authentication
+
+Requires JWT authentication token. Admins can view organization-wide KPIs or specific employee KPIs. Employees may be restricted based on permissions.
+
+## Query Parameters
+
+<ParamField query="empleado_id" type="integer">
+  Optional employee ID. If provided, returns KPIs specific to that employee. If omitted, returns organization-wide KPIs.
+</ParamField>
+
+## Response
+
+<ResponseField name="status" type="string">
+  Response status ("success")
+</ResponseField>
+
+<ResponseField name="data" type="object">
+  KPI data object
+  
+  <ResponseField name="solicitudes_pendientes" type="integer">
+    Number of requests with "Pendiente" (Pending) status. For organization-wide: total pending requests. For employee: pending requests from that employee.
+  </ResponseField>
+  
+  <ResponseField name="ausentes_hoy" type="integer">
+    Number of employees currently absent (requests approved with today's date within the range). For employee-specific: 1 if employee is absent today, 0 otherwise.
+  </ResponseField>
+  
+  <ResponseField name="dias_vacaciones_otorgados_ytd" type="integer">
+    Total vacation days approved year-to-date. For organization: sum across all employees. For employee: sum for that employee only.
+  </ResponseField>
+  
+  <ResponseField name="plantilla_activa" type="integer">
+    Total number of active employees in the organization. Only returned for organization-wide queries (null when empleado_id is provided).
+  </ResponseField>
+  
+  <ResponseField name="empleado_nombre" type="string">
+    Full name of the employee. Only returned when empleado_id parameter is provided (null for organization-wide queries).
+  </ResponseField>
+</ResponseField>
+
+## Error Responses
+
+<ResponseField name="500" type="object">
+  Internal server error
+  ```json
+  {
+    "status": "error",
+    "message": "Error al obtener indicadores."
+  }
+  ```
+</ResponseField>
+
+## Code Examples
+
+### Organization-wide KPIs
+
+```bash cURL
+curl -X GET 'https://api.example.com/api/dashboard-admin/kpis' \
+  -H 'Authorization: Bearer YOUR_JWT_TOKEN'
+```
+
+```javascript JavaScript
+// Get organization-wide KPIs
+const response = await fetch('https://api.example.com/api/dashboard-admin/kpis', {
+  method: 'GET',
+  headers: {
+    'Authorization': 'Bearer YOUR_JWT_TOKEN',
+    'Content-Type': 'application/json'
+  }
+});
+
+const kpis = await response.json();
+console.log(`Pending requests: ${kpis.data.solicitudes_pendientes}`);
+console.log(`Absent today: ${kpis.data.ausentes_hoy}`);
+console.log(`Vacation days YTD: ${kpis.data.dias_vacaciones_otorgados_ytd}`);
+console.log(`Active employees: ${kpis.data.plantilla_activa}`);
+```
+
+```python Python
+import requests
+
+# Organization-wide KPIs
+url = 'https://api.example.com/api/dashboard-admin/kpis'
+headers = {
+    'Authorization': 'Bearer YOUR_JWT_TOKEN',
+    'Content-Type': 'application/json'
+}
+
+response = requests.get(url, headers=headers)
+kpis = response.json()['data']
+
+print(f"Pending requests: {kpis['solicitudes_pendientes']}")
+print(f"Absent today: {kpis['ausentes_hoy']}")
+print(f"Vacation days YTD: {kpis['dias_vacaciones_otorgados_ytd']}")
+print(f"Active employees: {kpis['plantilla_activa']}")
+```
+
+### Employee-specific KPIs
+
+```bash cURL
+curl -X GET 'https://api.example.com/api/dashboard-admin/kpis?empleado_id=42' \
+  -H 'Authorization: Bearer YOUR_JWT_TOKEN'
+```
+
+```javascript JavaScript
+// Get employee-specific KPIs
+const employeeId = 42;
+const response = await fetch(
+  `https://api.example.com/api/dashboard-admin/kpis?empleado_id=${employeeId}`,
+  {
+    method: 'GET',
+    headers: {
+      'Authorization': 'Bearer YOUR_JWT_TOKEN',
+      'Content-Type': 'application/json'
+    }
+  }
+);
+
+const kpis = await response.json();
+console.log(`Employee: ${kpis.data.empleado_nombre}`);
+console.log(`Their pending requests: ${kpis.data.solicitudes_pendientes}`);
+console.log(`Absent today: ${kpis.data.ausentes_hoy === 1 ? 'Yes' : 'No'}`);
+```
+
+```python Python
+import requests
+
+# Employee-specific KPIs
+employee_id = 42
+url = f'https://api.example.com/api/dashboard-admin/kpis'
+params = {'empleado_id': employee_id}
+headers = {
+    'Authorization': 'Bearer YOUR_JWT_TOKEN',
+    'Content-Type': 'application/json'
+}
+
+response = requests.get(url, params=params, headers=headers)
+kpis = response.json()['data']
+
+print(f"Employee: {kpis['empleado_nombre']}")
+print(f"Their pending requests: {kpis['solicitudes_pendientes']}")
+print(f"Absent today: {'Yes' if kpis['ausentes_hoy'] == 1 else 'No'}")
+print(f"Vacation days YTD: {kpis['dias_vacaciones_otorgados_ytd']}")
+```
+
+## Example Responses
+
+### Organization-wide Response
+
+```json
+{
+  "status": "success",
+  "data": {
+    "solicitudes_pendientes": 15,
+    "ausentes_hoy": 8,
+    "dias_vacaciones_otorgados_ytd": 342,
+    "plantilla_activa": 125,
+    "empleado_nombre": null
+  }
+}
+```
+
+### Employee-specific Response
+
+```json
+{
+  "status": "success",
+  "data": {
+    "solicitudes_pendientes": 2,
+    "ausentes_hoy": 0,
+    "dias_vacaciones_otorgados_ytd": 10,
+    "plantilla_activa": null,
+    "empleado_nombre": "Juan Pérez González"
+  }
+}
+```
+
+## KPI Definitions
+
+<CardGroup cols={2}>
+  <Card title="Pending Requests" icon="clock">
+    Count of requests awaiting approval. Helps admins prioritize review workload.
+  </Card>
+  <Card title="Absent Today" icon="user-slash">
+    Number of employees with approved requests covering today's date. Useful for workforce planning.
+  </Card>
+  <Card title="Vacation Days YTD" icon="umbrella-beach">
+    Total vacation days approved since January 1st of current year. Tracks vacation utilization.
+  </Card>
+  <Card title="Active Employees" icon="users">
+    Current headcount of active employees. Only shown for organization-wide view.
+  </Card>
+</CardGroup>
+
+## Use Cases
+
+<CardGroup cols={2}>
+  <Card title="Admin Dashboard" icon="chart-line">
+    Display key metrics on admin dashboard homepage for quick overview
+  </Card>
+  <Card title="Workforce Planning" icon="calendar-days">
+    Monitor current absences to ensure adequate staffing levels
+  </Card>
+  <Card title="Employee Profile" icon="id-card">
+    Show employee-specific metrics on their profile page
+  </Card>
+  <Card title="Approval Queue" icon="list-check">
+    Display pending request count with link to approval interface
+  </Card>
+</CardGroup>

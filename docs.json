@@ -85,6 +85,8 @@
             "pages": [
               "api/requests/overview",
               "api/requests/get-requests",
+              "api/requests/get-by-id",
+              "api/requests/get-pending",
               "api/requests/create-request",
               "api/requests/vacation-request",
               "api/requests/profile-update",
@@ -97,6 +99,7 @@
             "pages": [
               "api/announcements/get-active",
               "api/announcements/get-by-id",
+              "api/announcements/get-all-admin",
               "api/announcements/create",
               "api/announcements/update",
               "api/announcements/deactivate"
@@ -123,7 +126,16 @@
           {
             "group": "Dashboard",
             "pages": [
+              "api/dashboard/kpis",
+              "api/dashboard/distribution",
+              "api/dashboard/trends",
               "api/dashboard/vacation-stats"
+            ]
+          },
+          {
+            "group": "Uploads",
+            "pages": [
+              "api/uploads/overview"
             ]
           }
         ]
