@@ -1,0 +1,250 @@
+---
+title: Request Workflow
+description: Understanding the solicitud (request) lifecycle and approval process
+---
+
+The Portal Self-Service Backend implements a comprehensive request (solicitud) management system that handles various types of employee requests with a structured approval workflow.
+
+## Request States
+
+Requests go through different states during their lifecycle:
+
+<CardGroup cols={2}>
+  <Card title="Pendiente" icon="clock">
+    Initial state when a request is created. Awaiting admin review and approval.
+  </Card>
+  <Card title="Aprobada" icon="check">
+    Request has been approved by an administrator. Changes are applied to the system.
+  </Card>
+  <Card title="Rechazada" icon="xmark">
+    Request has been rejected by an administrator. Employee is notified with feedback.
+  </Card>
+  <Card title="Cancelada" icon="ban">
+    Request was cancelled by the employee before processing. Only available for pending requests.
+  </Card>
+</CardGroup>
+
+## Request Types
+
+The system supports multiple request types, each with specific validation logic:
+
+```javascript
+export const TIPOS_SOLICITUD = Object.freeze({
+    VACACIONES: 1,           // Vacation requests
+    PERMISO: 2,              // Permission requests
+    AUSENCIA: 3,             // Absence requests
+    TRABAJO_EXTERIOR: 4,     // Remote work requests
+    ACTUALIZAR_PERFIL: 5     // Profile update requests
+});
+```
+
+## Request Lifecycle
+
+### 1. Request Creation
+
+Employees create requests through the API. The system validates the request data and assigns the initial `Pendiente` state:
+
+```javascript
+// From solicitudController.js:169-178
+const nuevaSolicitud = await solicitudService.createSolicitud({
+    id_empleado: id_empleado,
+    id_tipo_solicitud: id_tipo_solicitud,
+    id_estado_solicitud: 1, // PENDIENTE
+    fecha_inicio: fechaInicioFormat,
+    fecha_fin: fechaFinFormat,
+    dias_solicitados: diasSolicitados,
+    descripcion_solicitud,
+    documento_url 
+});
+```
+
+<Note>
+When a request is created, notifications are automatically sent to all HR administrators (ADMIN role).
+</Note>
+
+### 2. Admin Review
+
+Administrators can view pending requests and take action:
+
+```javascript
+// Get pending requests - solicitudController.js:418-463
+export const getSolicitudesPendientes = async (req, res) => {
+    const { page = 1, limit = 25, id_tipo, search, start_date, end_date } = req.query;
+    
+    const filtros = { page, limit, id_tipo, search, start_date, end_date };
+    
+    const data = await solicitudService.getAllSolicitudesPendientes(filtros);
+    
+    return res.status(200).json({
+        status: 'success',
+        data: {
+            solicitudes: data.solicitudes,
+            pagination: {
+                total: data.totalCount,
+                page: parseInt(page),
+                limit: parseInt(limit),
+                totalPages: Math.ceil(data.totalCount / limit)
+            }
+        }
+    });
+};
+```
+
+### 3. Approval Process
+
+The approval process varies by request type. Vacation requests require additional validation:
+
+```javascript
+// From solicitudController.js:509-536
+switch (tipoSolicitud) {
+    case TIPOS_SOLICITUD.VACACIONES:
+        const empleadoSolicitante = await empleadoService.getEmpleadoById(solicitud.id_empleado);
+        const diasSolicitados = solicitud.dias_solicitados || 0;
+        const diasDisponibles = empleadoSolicitante.vacaciones[0]?.dias_disponibles || 0
+         
+        // Validate employee has sufficient vacation days
+        if (diasSolicitados > diasDisponibles) {
+            return res.status(400).json({ 
+                message: `Días insuficientes. El empleado solicita ${diasSolicitados} y dispone de ${diasDisponibles}.`,
+                dias_solicitados: diasSolicitados,
+                dias_disponibles: diasDisponibles
+            });
+        }
+    
+        resultadoTransaccion = await solicitudService.aprobarVacacionesTransaction({
+            id_solicitud: solicitud.id_solicitud,
+            id_empleado: solicitud.id_empleado,
+            dias_solicitados: solicitud.dias_solicitados,  
+            id_aprobador: id_aprobador,
+            retroalimentacion: retroalimentacion || null
+        });
+        break;
+}
+```
+
+<Warning>
+Vacation requests validate that the employee has sufficient available days before approval. If insufficient, the request is rejected with an error message.
+</Warning>
+
+### 4. Rejection Process
+
+Administrators can reject requests with optional feedback:
+
+```javascript
+// From solicitudController.js:281-332
+export const rechazarSolicitud = async (req, res) => {  
+    const { id } = req.params;
+    const { retroalimentacion } = req.body;
+    
+    const solicitud = await solicitudService.getSolicitudById(id);
+    
+    // Validate request state
+    if (solicitud.id_estado_solicitud !== ESTADOS_SOLICITUD.PENDIENTE) {
+        return res.status(400).json({ message: 'La solicitud ya ha sido procesada' });
+    }
+    
+    const resultadoTransaccion = await solicitudService.rechazarSolicitudTransaction({
+        id_solicitud: solicitud.id_solicitud,
+        id_aprobador: aprobador.id_empleado,
+        retroalimentacion: retroalimentacion || null
+    });
+    
+    // Send notification to employee
+    notificationService.sendNotificationEmployee({
+        id_usuario: solicitud.id_empleado,
+        id_remitente: aprobador.id_empleado, 
+        titulo: 'Respuesta de solicitud',
+        mensaje: `Tu solicitud ha sido rechazda.`, 
+        id_tipo_notificacion: TIPOS_NOTIFICACION.SOLICITUD_RECHAZADA,
+        id_referencia: solicitud.id_solicitud
+    });
+    
+    return res.status(200).json({
+        message: 'Solicitud rechazada exitosamente',
+        solicitud_actualizada: resultadoTransaccion
+    });
+};
+```
+
+### 5. Employee Cancellation
+
+Employees can cancel their own pending requests:
+
+```javascript
+// From solicitudController.js:338-372
+export const cancelarSolicitud = async (req, res) => {
+    const { id } = req.params;
+    const empleado = req.empleado;
+    const solicitud = await solicitudService.getSolicitudById(id);
+    
+    // Validate ownership
+    if (solicitud.id_empleado !== empleado.id_empleado) {
+        return res.status(403).json({ message: 'Solo puedes cancelar tus propias solicitudes' });
+    }
+    
+    // Validate state - can only cancel pending requests
+    if (solicitud.id_estado_solicitud !== ESTADOS_SOLICITUD.PENDIENTE) {
+        return res.status(400).json({ message: 'La solicitud ya fue procesada, no se puede cancelar' });
+    }
+    
+    const resultadoTransaccion = await solicitudService.cancelarSolicitudTransaction({
+        id_solicitud: id
+    });
+    
+    return res.status(200).json({
+        message: 'Solicitud cancelada exitosamente',
+        solicitud_actualizada: resultadoTransaccion
+    });
+};
+```
+
+## State Transition Rules
+
+<Steps>
+  <Step title="Creation">
+    New requests start in `Pendiente` state
+  </Step>
+  <Step title="Processing">
+    Admins can approve (→ `Aprobada`) or reject (→ `Rechazada`) pending requests
+  </Step>
+  <Step title="Cancellation">
+    Employees can cancel their own requests (→ `Cancelada`) only while in `Pendiente` state
+  </Step>
+  <Step title="Final States">
+    `Aprobada`, `Rechazada`, and `Cancelada` are terminal states - no further transitions allowed
+  </Step>
+</Steps>
+
+## Access Control
+
+The system enforces role-based access control (RBAC):
+
+```javascript
+// From solicitudController.js:110-120
+const rol = empleadoLogueado.rol?.descripcion;
+
+// Employee can only view their own requests
+const esDuenio = solicitud.id_empleado === empleadoLogueado.id_empleado;
+
+// Admin/Super Admin can view any request
+const tienePermisoAdmin = rol === ROLES.ADMIN || rol === ROLES.SUPER_ADMIN;
+
+if (!esDuenio && !tienePermisoAdmin) {
+    return res.status(403).json({ message: 'No tienes permiso para ver esta solicitud.' });
+}
+```
+
+<Info>
+Employees can only view and cancel their own requests. Administrators can view, approve, and reject any request.
+</Info>
+
+## Related Resources
+
+<CardGroup cols={2}>
+  <Card title="Notifications" icon="bell" href="/concepts/notifications">
+    Learn how notifications are sent during the request workflow
+  </Card>
+  <Card title="WebSockets" icon="podcast" href="/concepts/websockets">
+    Real-time updates for request status changes
+  </Card>
+</CardGroup>

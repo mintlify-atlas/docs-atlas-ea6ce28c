@@ -1,0 +1,122 @@
+---
+title: 'Get Active Announcements'
+api: 'GET /api/comunicados'
+description: 'Retrieve a list of active announcements for the main feed'
+---
+
+## Overview
+
+This endpoint returns all active (published) announcements. Inactive or draft announcements are not included in the response. Optionally supports limiting the number of results.
+
+## Query Parameters
+
+<ParamField query="limit" type="integer" optional>
+  Maximum number of announcements to return. If not specified, returns all active announcements.
+</ParamField>
+
+## Response
+
+<ResponseField name="comunicados" type="array">
+  Array of active announcement objects
+  
+  <ResponseField name="id_comunicado" type="integer">
+    Unique identifier for the announcement
+  </ResponseField>
+  
+  <ResponseField name="titulo" type="string">
+    Title of the announcement
+  </ResponseField>
+  
+  <ResponseField name="contenido" type="string">
+    Content/body of the announcement
+  </ResponseField>
+  
+  <ResponseField name="fecha_publicacion" type="string">
+    Publication date in ISO 8601 format
+  </ResponseField>
+  
+  <ResponseField name="activo" type="boolean">
+    Whether the announcement is active (always true for this endpoint)
+  </ResponseField>
+  
+  <ResponseField name="media_url" type="string" optional>
+    URL to associated media (image, video, etc.)
+  </ResponseField>
+  
+  <ResponseField name="fecha_creacion" type="string">
+    Creation timestamp in ISO 8601 format
+  </ResponseField>
+  
+  <ResponseField name="fecha_actualizacion" type="string">
+    Last update timestamp in ISO 8601 format
+  </ResponseField>
+</ResponseField>
+
+<RequestExample>
+```bash cURL
+curl -X GET "https://api.example.com/api/comunicados?limit=5" \
+  -H "Authorization: Bearer YOUR_TOKEN"
+```
+
+```javascript JavaScript
+const response = await fetch('https://api.example.com/api/comunicados?limit=5', {
+  method: 'GET',
+  headers: {
+    'Authorization': 'Bearer YOUR_TOKEN'
+  }
+});
+
+const data = await response.json();
+```
+</RequestExample>
+
+<ResponseExample>
+```json 200 - Success
+[
+  {
+    "id_comunicado": 1,
+    "titulo": "Welcome to the Portal",
+    "contenido": "We are excited to announce the launch of our new self-service portal.",
+    "fecha_publicacion": "2026-03-01T10:00:00Z",
+    "activo": true,
+    "media_url": "https://example.com/media/welcome.jpg",
+    "fecha_creacion": "2026-02-28T15:30:00Z",
+    "fecha_actualizacion": "2026-02-28T15:30:00Z"
+  },
+  {
+    "id_comunicado": 2,
+    "titulo": "System Maintenance Notice",
+    "contenido": "Scheduled maintenance will occur on Saturday from 2 AM to 4 AM.",
+    "fecha_publicacion": "2026-03-05T08:00:00Z",
+    "activo": true,
+    "media_url": null,
+    "fecha_creacion": "2026-03-04T12:00:00Z",
+    "fecha_actualizacion": "2026-03-04T12:00:00Z"
+  }
+]
+```
+
+```json 200 - No Active Announcements
+{
+  "message": "No hay comunicados activos para mostrar.",
+  "comunicados": []
+}
+```
+
+```json 500 - Server Error
+{
+  "message": "Error interno del servidor."
+}
+```
+</ResponseExample>
+
+## Related Endpoints
+
+<CardGroup cols={2}>
+  <Card title="Get Announcement by ID" icon="file-lines" href="/api/announcements/get-by-id">
+    Retrieve a specific announcement by its ID
+  </Card>
+  <Card title="Create Announcement" icon="plus" href="/api/announcements/create">
+    Create a new announcement (Admin only)
+  </Card>
+</CardGroup>

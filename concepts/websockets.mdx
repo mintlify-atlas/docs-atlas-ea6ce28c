@@ -1,0 +1,352 @@
+---
+title: WebSocket Integration
+description: Real-time communication using Socket.io with Azure AD authentication
+---
+
+The Portal Self-Service Backend uses Socket.io to provide real-time bidirectional communication between the server and clients, with integrated Azure AD JWT authentication.
+
+## Architecture
+
+<CardGroup cols={3}>
+  <Card title="Socket.io Server" icon="server">
+    WebSocket server with CORS and authentication middleware
+  </Card>
+  <Card title="JWT Verification" icon="shield">
+    Azure AD token validation using JWKS
+  </Card>
+  <Card title="Room-Based Messaging" icon="users">
+    User-specific rooms for targeted message delivery
+  </Card>
+</CardGroup>
+
+## Server Initialization
+
+The Socket.io server is initialized with CORS configuration and attached to the HTTP server:
+
+```javascript
+// From socket.js:27-34
+export const initSocket = (httpServer) => {
+    io = new Server(httpServer, {
+        cors: {
+            origin: process.env.FRONTEND_URL || 'http://localhost:5173',
+            methods: ['GET', 'POST'],
+            credentials: true
+        }
+    });
+    
+    // ... middleware and event handlers
+};
+```
+
+<Info>
+The `FRONTEND_URL` environment variable controls which origins can connect to the WebSocket server.
+</Info>
+
+## Azure AD Authentication
+
+### JWKS Client Setup
+
+The server uses `jwks-rsa` to fetch and verify Azure AD public keys:
+
+```javascript
+// From socket.js:10-25
+import jwksClient from 'jwks-rsa';
+
+// Client to fetch public keys from Microsoft Entra ID
+const client = jwksClient({
+    jwksUri: `${process.env.AZURE_ISSUER_BASE_URL}/discovery/v2.0/keys`
+});
+
+// Helper function to get signing key for JWT verification
+function getKey(header, callback) {
+    client.getSigningKey(header.kid, function(err, key) {
+        if (err) {
+            callback(err, null);
+        } else {
+            const signingKey = key.publicKey || key.rsaPublicKey;
+            callback(null, signingKey);
+        }
+    });
+}
+```
+
+### Authentication Middleware
+
+Every Socket.io connection is authenticated before being established:
+
+```javascript
+// From socket.js:36-74
+io.use((socket, next) => {
+    // Frontend must pass token: 
+    // const socket = io(url, { auth: { token: 'jwt_token_here' } });
+    const token = socket.handshake.auth.token;
+    
+    if (!token) {
+        return next(new Error('Autenticación requerida: No se proporcionó token.'));
+    }
+    
+    // Verify token against Microsoft
+    jwt.verify(token, getKey, {
+        audience: process.env.AZURE_AUDIENCE,
+        issuer: process.env.AZURE_ISSUER_BASE_URL
+    }, async (err, decoded) => {
+        if (err) {
+            console.error("Socket Auth Error:", err.message);
+            return next(new Error('Autenticación fallida: Token de Azure inválido.'));
+        }
+        
+        // Token is 100% valid and signed by Microsoft
+        try {
+            // Look up user in local database using Azure email
+            const userEmail = decoded.upn || decoded.preferred_username;
+            const empleado = await Empleado.findOne({ 
+                where: { correo: userEmail } 
+            });
+            
+            if (!empleado) {
+                return next(new Error('Usuario no encontrado en el sistema local.'));
+            }
+            
+            // Store internal database ID in socket for notifications
+            socket.userId = empleado.id_empleado;
+            
+            next();
+        } catch (dbError) {
+            console.error("Error buscando usuario en DB para Socket:", dbError);
+            return next(new Error('Error interno de servidor durante la autenticación.'));
+        }
+    });
+});
+```
+
+<Warning>
+Authentication failures prevent the WebSocket connection from being established. Ensure the client passes a valid Azure AD JWT token.
+</Warning>
+
+## Client Connection
+
+### Frontend Integration
+
+Clients connect by passing their JWT token in the authentication handshake:
+
+```javascript
+import { io } from 'socket.io-client';
+
+// Get JWT token from your authentication system
+const token = getAzureADToken();
+
+// Connect with authentication
+const socket = io('http://your-backend-url', {
+    auth: {
+        token: token
+    }
+});
+
+// Listen for notifications
+socket.on('nueva_notificacion', (notificacion) => {
+    console.log('New notification received:', notificacion);
+    // Update UI with notification
+});
+
+// Handle connection errors
+socket.on('connect_error', (error) => {
+    console.error('Socket connection failed:', error.message);
+});
+```
+
+### Environment Variables Required
+
+```bash
+AZURE_ISSUER_BASE_URL=https://login.microsoftonline.com/{tenant-id}/v2.0
+AZURE_AUDIENCE=api://your-app-client-id
+FRONTEND_URL=https://your-frontend-domain.com
+```
+
+## Room-Based Messaging
+
+### Personal Rooms
+
+When a user connects, they're automatically joined to a personal room:
+
+```javascript
+// From socket.js:76-89
+io.on('connection', (socket) => {
+    const idEmpleado = socket.userId;
+    const roomName = `room_${idEmpleado}`;
+    
+    console.log(`[Socket] Usuario (ID BD: ${idEmpleado}) conectado al socket ${socket.id}`);
+    
+    // Join user to their personal room
+    socket.join(roomName);
+    
+    socket.on('disconnect', () => {
+        console.log(`[Socket] Usuario ${idEmpleado} desconectado`);
+    });
+});
+```
+
+<Info>
+Room naming convention: `room_{id_empleado}`. Each employee gets a unique room for receiving their notifications.
+</Info>
+
+### Sending Messages to Rooms
+
+The notification system uses rooms to deliver messages to specific users:
+
+```javascript
+// From socket.js:91-97
+notificationEmitter.on(EVENTOS_INTERNOS.NOTIFICACION_CREADA, (notificacionData) => {
+    const roomDestinatario = `room_${notificacionData.id_usuario}`;
+    
+    io.to(roomDestinatario).emit('nueva_notificacion', notificacionData);
+    console.log(`[Socket] Notificación enviada a la sala ${roomDestinatario}`);
+});
+```
+
+## Event Flow Diagram
+
+<Steps>
+  <Step title="Client Connection">
+    Frontend initiates Socket.io connection with JWT token
+  </Step>
+  <Step title="Authentication">
+    Server validates token against Azure AD using JWKS
+  </Step>
+  <Step title="Database Lookup">
+    Server finds employee record using email from JWT claims
+  </Step>
+  <Step title="Room Assignment">
+    User is joined to personal room `room_{id_empleado}`
+  </Step>
+  <Step title="Event Listening">
+    Client listens for `nueva_notificacion` events
+  </Step>
+  <Step title="Notification Delivery">
+    Server emits to user's room when notifications are created
+  </Step>
+</Steps>
+
+## Connection Management
+
+### Accessing Socket.io Instance
+
+The socket instance can be accessed anywhere in the application:
+
+```javascript
+// From socket.js:102-107
+export const getIO = () => {
+    if (!io) {
+        throw new Error('Socket.io no ha sido inicializado.');
+    }
+    return io;
+};
+```
+
+### Usage Example
+
+```javascript
+import { getIO } from './config/socket.js';
+
+// Send custom event to specific user
+const io = getIO();
+io.to(`room_${employeeId}`).emit('custom_event', data);
+```
+
+## Security Considerations
+
+<CardGroup cols={2}>
+  <Card title="Token Validation" icon="lock">
+    All tokens are verified against Azure AD public keys before connection
+  </Card>
+  <Card title="Room Isolation" icon="door-closed">
+    Users can only receive messages sent to their personal room
+  </Card>
+  <Card title="CORS Protection" icon="shield">
+    Only whitelisted origins can establish WebSocket connections
+  </Card>
+  <Card title="No Auto-Join" icon="ban">
+    Users cannot join arbitrary rooms - only their assigned personal room
+  </Card>
+</CardGroup>
+
+<Warning>
+**Important Security Notes:**
+- Never expose internal employee IDs to clients
+- Always validate JWT tokens on every connection
+- Use environment variables for sensitive configuration
+- Implement rate limiting for production deployments
+</Warning>
+
+## Error Handling
+
+### Authentication Errors
+
+```javascript
+// Client-side error handling
+socket.on('connect_error', (error) => {
+    if (error.message.includes('Autenticación')) {
+        // Refresh token and retry
+        refreshAzureToken().then(newToken => {
+            socket.auth.token = newToken;
+            socket.connect();
+        });
+    }
+});
+```
+
+### Connection State Management
+
+```javascript
+socket.on('connect', () => {
+    console.log('WebSocket connected');
+    // Update UI to show online status
+});
+
+socket.on('disconnect', (reason) => {
+    console.log('WebSocket disconnected:', reason);
+    // Update UI to show offline status
+    
+    if (reason === 'io server disconnect') {
+        // Server disconnected, manual reconnection needed
+        socket.connect();
+    }
+    // Otherwise Socket.io will auto-reconnect
+});
+```
+
+## Testing WebSocket Connections
+
+Use the Socket.io client for testing:
+
+```javascript
+import { io } from 'socket.io-client';
+
+// Test connection
+const socket = io('http://localhost:3000', {
+    auth: { token: 'your-test-jwt-token' }
+});
+
+socket.on('connect', () => {
+    console.log('✓ Connected successfully');
+    console.log('Socket ID:', socket.id);
+});
+
+socket.on('nueva_notificacion', (data) => {
+    console.log('✓ Received notification:', data);
+});
+
+socket.on('connect_error', (error) => {
+    console.error('✗ Connection failed:', error.message);
+});
+```
+
+## Related Resources
+
+<CardGroup cols={2}>
+  <Card title="Notifications" icon="bell" href="/concepts/notifications">
+    Learn how notifications are created and delivered via WebSockets
+  </Card>
+  <Card title="Request Workflow" icon="diagram-project" href="/concepts/request-workflow">
+    See how real-time updates enhance the request workflow
+  </Card>
+</CardGroup>

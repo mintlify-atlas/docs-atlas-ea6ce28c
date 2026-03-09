@@ -1,0 +1,240 @@
+---
+title: 'Database Setup'
+description: 'Configure MSSQL Server database connection for Portal Self-Service Backend'
+---
+
+## Overview
+
+The Portal Self-Service Backend uses **Microsoft SQL Server (MSSQL)** as its database, with connections managed through the `mssql` package. The application establishes a connection pool for efficient database operations.
+
+## Database Requirements
+
+<CardGroup cols={2}>
+  <Card title="MSSQL Server" icon="database">
+    Microsoft SQL Server instance (2016 or later recommended)
+  </Card>
+  <Card title="Network Access" icon="network-wired">
+    Server must be accessible from your application host
+  </Card>
+  <Card title="Authentication" icon="key">
+    Valid database credentials (user/password)
+  </Card>
+  <Card title="Database Created" icon="table">
+    Target database must exist before connecting
+  </Card>
+</CardGroup>
+
+## Required Environment Variables
+
+The following environment variables must be configured for database connectivity:
+
+| Variable | Description | Example |
+|----------|-------------|----------|
+| `DB_USER` | Database username | `sa` or `app_user` |
+| `DB_PASSWORD` | Database password | `YourSecurePassword123!` |
+| `DB_SERVER` | Database server hostname or IP | `localhost` or `192.168.1.100` |
+| `DB_DATABASE` | Database name | `PortalSelfService` |
+| `DB_PORT` | SQL Server port | `1433` (default) |
+
+## Connection Configuration
+
+<Steps>
+  <Step title="Review Database Configuration">
+    The database configuration is defined in `src/config/db.config.js`. Here's the connection setup:
+
+    ```javascript src/config/db.config.js
+    import sql from 'mssql';
+
+    const config = {
+        user: process.env.DB_USER,
+        password: process.env.DB_PASSWORD,
+        server: process.env.DB_SERVER, 
+        database: process.env.DB_DATABASE,
+        port: parseInt(process.env.DB_PORT, 10),
+        options: {
+            trustServerCertificate: true, 
+            enableArithAbort: true
+        },
+        pool: {
+            max: 10,
+            min: 0,
+            idleTimeoutMillis: 30000
+        }
+    };
+    ```
+  </Step>
+
+  <Step title="Connection Pool Settings">
+    The application uses a connection pool with the following configuration:
+
+    - **Maximum connections**: 10 concurrent connections
+    - **Minimum connections**: 0 (connections created on-demand)
+    - **Idle timeout**: 30 seconds before releasing idle connections
+  </Step>
+
+  <Step title="SSL/TLS Configuration">
+    The connection uses `trustServerCertificate: true` to allow self-signed certificates. 
+    
+    <Warning>
+      In production environments, configure proper SSL certificates and set `trustServerCertificate: false` for enhanced security.
+    </Warning>
+  </Step>
+</Steps>
+
+## Connection Pool Initialization
+
+The application establishes the database connection pool at startup:
+
+```javascript src/config/db.config.js
+const poolPromise = new sql.ConnectionPool(config)
+    .connect()
+    .then(pool => {
+        console.log('Conexión a SQL Server establecida.');
+        return pool;
+    })
+    .catch(err => {
+        console.error('Falló la conexión a SQL Server:', err.message);
+        throw err; 
+    });
+
+export { sql, poolPromise, dbConfig };
+```
+
+<Note>
+  The connection is established asynchronously and verified during server startup in `server.js`.
+</Note>
+
+## Server Startup Verification
+
+The application waits for the database connection before starting the HTTP server:
+
+```javascript server.js
+async function startServer() {
+    try {
+        await poolPromise; // Wait for database connection
+        
+        server.listen(PORT, () => {
+            console.log(`Servidor escuchando en http://localhost:${PORT}`);
+        });
+    } catch (error) {
+        console.error('Error fatal: La aplicación no pudo iniciar.', error.message);
+        process.exit(1); 
+    }
+}
+```
+
+## Troubleshooting
+
+### Connection Refused
+
+<Card title="Check Network Connectivity" icon="network-wired">
+  Ensure the database server is reachable:
+  
+  ```bash
+  # Test connectivity to SQL Server
+  telnet your-db-server 1433
+  ```
+</Card>
+
+### Authentication Failed
+
+<CardGroup cols={2}>
+  <Card title="Verify Credentials" icon="user-lock">
+    - Double-check `DB_USER` and `DB_PASSWORD`
+    - Ensure the user has access to the specified database
+    - Check for special characters in password (may need escaping)
+  </Card>
+  
+  <Card title="SQL Server Authentication" icon="shield">
+    - Verify SQL Server authentication mode is enabled (not Windows-only)
+    - Confirm the user account is not locked or disabled
+  </Card>
+</CardGroup>
+
+### Connection Timeout
+
+<Steps>
+  <Step title="Check Firewall">
+    Ensure port 1433 (or your custom port) is open on the database server firewall.
+  </Step>
+  
+  <Step title="Verify SQL Server Configuration">
+    Ensure TCP/IP protocol is enabled in SQL Server Configuration Manager.
+  </Step>
+  
+  <Step title="Check Connection String">
+    Verify `DB_SERVER` and `DB_PORT` are correct in your `.env` file.
+  </Step>
+</Steps>
+
+### Database Does Not Exist
+
+<Warning>
+  The database specified in `DB_DATABASE` must be created manually before running the application. The application does not auto-create databases.
+</Warning>
+
+Create the database using SQL Server Management Studio (SSMS) or via T-SQL:
+
+```sql
+CREATE DATABASE PortalSelfService;
+GO
+```
+
+## Common Issues
+
+| Issue | Possible Cause | Solution |
+|-------|---------------|----------|
+| `ConnectionError: Failed to connect` | Server unreachable | Verify `DB_SERVER` and network connectivity |
+| `Login failed for user` | Invalid credentials | Check `DB_USER` and `DB_PASSWORD` |
+| `Cannot open database` | Database doesn't exist | Create database or verify `DB_DATABASE` name |
+| `Connection timeout` | Firewall blocking | Enable port 1433 in firewall rules |
+| `Self signed certificate` | SSL validation | Already handled with `trustServerCertificate: true` |
+
+## Testing the Connection
+
+To verify your database configuration:
+
+<Steps>
+  <Step title="Set Environment Variables">
+    Configure all required variables in your `.env` file.
+  </Step>
+  
+  <Step title="Start the Application">
+    ```bash
+    npm start
+    ```
+  </Step>
+  
+  <Step title="Check Console Output">
+    Look for the success message:
+    ```
+    Conexión a SQL Server establecida.
+    Servidor escuchando en http://localhost:3000
+    ```
+  </Step>
+  
+  <Step title="Test Health Endpoint">
+    ```bash
+    curl http://localhost:3000/health
+    ```
+    
+    Expected response:
+    ```json
+    {
+      "status": "UP",
+      "message": "Express Server Running"
+    }
+    ```
+  </Step>
+</Steps>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Environment Configuration" icon="gear" href="/guides/environment-config">
+    Configure all environment variables including Azure AD
+  </Card>
+  <Card title="Deployment" icon="rocket" href="/guides/deployment">
+    Deploy your application to production
+  </Card>
+</CardGroup>

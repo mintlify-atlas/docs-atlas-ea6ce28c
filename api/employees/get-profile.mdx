@@ -1,0 +1,220 @@
+---
+title: "Get Current User Profile"
+api: "GET /api/empleados/profile"
+description: "Retrieve the authenticated user's employee profile with clinic, role, vacation, and request statistics"
+---
+
+## Overview
+
+This endpoint returns the complete profile information for the currently authenticated user. The system automatically links Azure AD accounts with employee records using either the Azure OID or email address.
+
+<Card title="Authentication Required" icon="lock">
+  This endpoint requires a valid JWT token from Azure AD authentication.
+</Card>
+
+## Authentication Flow
+
+The endpoint performs a two-step lookup:
+
+1. **Azure OID Lookup**: First attempts to find the employee by their Azure Object ID (`azure_oid`)
+2. **Email Fallback**: If not found by OID, searches by email address and automatically links the Azure OID (Just-in-Time provisioning)
+3. **Access Denied**: If the user doesn't exist in the employee database, returns 403
+
+## Request
+
+```bash
+curl -X GET 'https://api.yourcompany.com/api/empleados/profile' \
+  -H 'Authorization: Bearer YOUR_JWT_TOKEN'
+```
+
+### Headers
+
+<ParamField header="Authorization" type="string" required>
+  Bearer token from Azure AD authentication
+</ParamField>
+
+## Response
+
+<ResponseField name="id_empleado" type="integer">
+  Unique employee identifier
+</ResponseField>
+
+<ResponseField name="nombre" type="string">
+  Employee's full name
+</ResponseField>
+
+<ResponseField name="DNI" type="string">
+  Employee's national ID number
+</ResponseField>
+
+<ResponseField name="correo" type="string">
+  Employee's email address
+</ResponseField>
+
+<ResponseField name="telefono" type="string">
+  Employee's phone number
+</ResponseField>
+
+<ResponseField name="direccion" type="string">
+  Employee's physical address
+</ResponseField>
+
+<ResponseField name="fecha_ingreso" type="string">
+  Date the employee joined (format: YYYY-MM-DD)
+</ResponseField>
+
+<ResponseField name="fecha_salida" type="string">
+  Date the employee left (null if currently active)
+</ResponseField>
+
+<ResponseField name="puesto" type="string">
+  Employee's job position/title
+</ResponseField>
+
+<ResponseField name="img_perfil" type="string">
+  URL or path to profile image
+</ResponseField>
+
+<ResponseField name="azure_oid" type="string">
+  Azure AD Object ID for integration
+</ResponseField>
+
+<ResponseField name="id_rol" type="integer">
+  Foreign key to employee role
+</ResponseField>
+
+<ResponseField name="id_estado" type="integer">
+  Foreign key to employee status
+</ResponseField>
+
+<ResponseField name="id_clinica" type="integer">
+  Foreign key to assigned clinic
+</ResponseField>
+
+<ResponseField name="id_area" type="integer">
+  Foreign key to department/area
+</ResponseField>
+
+<ResponseField name="total_solicitudes" type="integer">
+  Total number of requests submitted by this employee
+</ResponseField>
+
+<ResponseField name="solicitudes_pendientes" type="integer">
+  Number of pending requests awaiting approval
+</ResponseField>
+
+<ResponseField name="clinica" type="object">
+  <Expandable title="properties">
+    <ResponseField name="nombre_clinica" type="string">
+      Name of the assigned clinic
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+<ResponseField name="estado_empleado" type="object">
+  <Expandable title="properties">
+    <ResponseField name="descripcion" type="string">
+      Employee status description (e.g., "Activo", "Inactivo")
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+<ResponseField name="rol" type="object">
+  <Expandable title="properties">
+    <ResponseField name="descripcion" type="string">
+      Role description (e.g., "Administrador", "Empleado", "Gerente")
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+<ResponseField name="vacaciones" type="array">
+  Array of vacation records for the employee
+  <Expandable title="properties">
+    <ResponseField name="dias_base" type="integer">
+      Base vacation days allocated per period
+    </ResponseField>
+    <ResponseField name="dias_tomados" type="integer">
+      Number of vacation days already taken
+    </ResponseField>
+    <ResponseField name="dias_disponibles" type="integer">
+      Remaining vacation days available
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+### Response Example
+
+<CodeGroup>
+```json 200 - Success
+{
+  "id_empleado": 42,
+  "nombre": "Juan Pérez",
+  "DNI": "12345678",
+  "correo": "juan.perez@company.com",
+  "telefono": "+51 987654321",
+  "direccion": "Av. Principal 123, Lima",
+  "fecha_ingreso": "2023-01-15",
+  "fecha_salida": null,
+  "puesto": "Desarrollador Senior",
+  "img_perfil": "/images/profiles/juan.jpg",
+  "azure_oid": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+  "id_rol": 3,
+  "id_estado": 1,
+  "id_clinica": 5,
+  "id_area": 2,
+  "total_solicitudes": 15,
+  "solicitudes_pendientes": 2,
+  "clinica": {
+    "nombre_clinica": "Clínica Central"
+  },
+  "estado_empleado": {
+    "descripcion": "Activo"
+  },
+  "rol": {
+    "descripcion": "Empleado"
+  },
+  "vacaciones": [
+    {
+      "dias_base": 20,
+      "dias_tomados": 8,
+      "dias_disponibles": 12
+    }
+  ]
+}
+```
+
+```json 403 - User Not Found in Database
+{
+  "message": "Acceso denegado. Usuario autenticado en AD, pero no existe en la base de datos del portal."
+}
+```
+
+```json 500 - Server Error
+{
+  "message": "Error interno del servidor"
+}
+```
+</CodeGroup>
+
+## Error Handling
+
+<CardGroup cols={2}>
+  <Card title="403 Forbidden" icon="ban">
+    User authenticated in Azure AD but not registered in the employee database
+  </Card>
+  
+  <Card title="500 Internal Error" icon="circle-exclamation">
+    Database connection issues or unexpected server errors
+  </Card>
+</CardGroup>
+
+## Just-in-Time Provisioning
+
+When an employee authenticates for the first time:
+
+1. System checks for existing `azure_oid` match
+2. If not found, searches by email in employee database
+3. If found by email, automatically updates the employee record with their `azure_oid`
+4. Future requests use the linked `azure_oid` for faster lookups
+
+This ensures seamless integration between Azure AD and the internal employee database.

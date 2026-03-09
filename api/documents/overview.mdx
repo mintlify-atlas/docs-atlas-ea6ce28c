@@ -1,0 +1,252 @@
+---
+title: 'Documents API'
+description: 'Manage company documents and documentation resources'
+icon: 'file-lines'
+---
+
+## Overview
+
+The Documents API allows users to retrieve company documents and administrators to manage the document library. All endpoints require authentication.
+
+## Endpoints
+
+<CardGroup cols={2}>
+  <Card title="Get Documents" icon="list" href="#get-documents">
+    Retrieve all documents or filter by category
+  </Card>
+  <Card title="Create Document" icon="plus" href="#create-document">
+    Create a new document (Admin only)
+  </Card>
+  <Card title="Update Document" icon="pen-to-square" href="#update-document">
+    Update document metadata or file (Admin only)
+  </Card>
+  <Card title="Delete Document" icon="trash" href="#delete-document">
+    Remove a document from the library (Admin only)
+  </Card>
+</CardGroup>
+
+---
+
+## Get Documents
+
+<CodeGroup>
+```bash GET /api/documentos
+curl -X GET "https://api.example.com/api/documentos?id_categoria=1" \
+  -H "Authorization: Bearer YOUR_TOKEN"
+```
+</CodeGroup>
+
+Retrieves a list of documents, optionally filtered by category.
+
+### Query Parameters
+
+<ParamField query="id_categoria" type="integer" optional>
+  Filter documents by category ID
+</ParamField>
+
+### Response
+
+<CodeGroup>
+```json 200 OK
+[
+  {
+    "id_documento": 1,
+    "titulo": "Employee Handbook",
+    "contenido": "Complete guide for employees",
+    "id_categoria": 1,
+    "url_documento": "https://storage.example.com/docs/handbook.pdf",
+    "fecha_creacion": "2024-01-15T10:30:00Z"
+  },
+  {
+    "id_documento": 2,
+    "titulo": "Safety Protocols",
+    "contenido": "Workplace safety guidelines",
+    "id_categoria": 1,
+    "url_documento": "https://storage.example.com/docs/safety.pdf",
+    "fecha_creacion": "2024-02-20T14:15:00Z"
+  }
+]
+```
+
+```json 500 Error
+{
+  "message": "Error interno del servidor."
+}
+```
+</CodeGroup>
+
+---
+
+## Create Document
+
+<CodeGroup>
+```bash POST /api/documentos/admin
+curl -X POST "https://api.example.com/api/documentos/admin" \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "titulo": "New Policy Document",
+    "contenido": "Updated company policies",
+    "id_categoria": 2,
+    "url_documento": "https://storage.example.com/docs/policy.pdf"
+  }'
+```
+</CodeGroup>
+
+<Note>
+  This endpoint requires **Admin** or **RRHH** role permissions.
+</Note>
+
+### Request Body
+
+<ParamField body="titulo" type="string" required>
+  Document title
+</ParamField>
+
+<ParamField body="contenido" type="string" optional>
+  Document description or summary
+</ParamField>
+
+<ParamField body="id_categoria" type="integer" optional>
+  Category ID for document classification
+</ParamField>
+
+<ParamField body="url_documento" type="string" required>
+  URL of the uploaded document file
+</ParamField>
+
+### Response
+
+<CodeGroup>
+```json 201 Created
+{
+  "message": "Documento y registro creados exitosamente.",
+  "documento": {
+    "id_documento": 15,
+    "titulo": "New Policy Document",
+    "contenido": "Updated company policies",
+    "id_categoria": 2,
+    "url_documento": "https://storage.example.com/docs/policy.pdf"
+  }
+}
+```
+
+```json 400 Bad Request
+{
+  "message": "Debe subir un archivo primero y proporcionar la URL."
+}
+```
+
+```json 400 Bad Request
+{
+  "message": "El título del documento es obligatorio."
+}
+```
+</CodeGroup>
+
+---
+
+## Update Document
+
+<CodeGroup>
+```bash PUT /api/documentos/admin/:id
+curl -X PUT "https://api.example.com/api/documentos/admin/15" \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "titulo": "Updated Policy Document",
+    "contenido": "Revised company policies",
+    "id_categoria": 2,
+    "url_documento": "https://storage.example.com/docs/policy-v2.pdf"
+  }'
+```
+</CodeGroup>
+
+<Note>
+  This endpoint requires **Admin** or **RRHH** role permissions.
+</Note>
+
+### Path Parameters
+
+<ParamField path="id" type="integer" required>
+  Document ID to update
+</ParamField>
+
+### Request Body
+
+<ParamField body="titulo" type="string" optional>
+  Updated document title
+</ParamField>
+
+<ParamField body="contenido" type="string" optional>
+  Updated document description
+</ParamField>
+
+<ParamField body="id_categoria" type="integer" optional>
+  Updated category ID
+</ParamField>
+
+<ParamField body="url_documento" type="string" optional>
+  Updated document URL (for new file versions)
+</ParamField>
+
+### Response
+
+<CodeGroup>
+```json 200 OK
+{
+  "message": "Documento actualizado exitosamente."
+}
+```
+
+```json 404 Not Found
+{
+  "message": "Documento no encontrado o sin cambios realizados."
+}
+```
+</CodeGroup>
+
+---
+
+## Delete Document
+
+<CodeGroup>
+```bash DELETE /api/documentos/admin/:id
+curl -X DELETE "https://api.example.com/api/documentos/admin/15" \
+  -H "Authorization: Bearer YOUR_TOKEN"
+```
+</CodeGroup>
+
+<Note>
+  This endpoint requires **Admin** or **RRHH** role permissions.
+</Note>
+
+### Path Parameters
+
+<ParamField path="id" type="integer" required>
+  Document ID to delete
+</ParamField>
+
+### Response
+
+<CodeGroup>
+```json 200 OK
+{
+  "message": "Documento eliminado exitosamente."
+}
+```
+
+```json 404 Not Found
+{
+  "message": "Documento no encontrado."
+}
+```
+</CodeGroup>
+
+---
+
+## Implementation Reference
+
+Source files:
+- Routes: `src/routes/documentacionRoutes.js:13-23`
+- Controller: `src/controllers/documentacionController.js:7-100`

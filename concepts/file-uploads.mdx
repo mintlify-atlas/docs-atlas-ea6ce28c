@@ -1,0 +1,492 @@
+---
+title: File Uploads
+description: Handling file uploads with Multer middleware for requests and documents
+---
+
+The Portal Self-Service Backend uses Multer to handle multipart/form-data file uploads, with separate configurations for different modules and comprehensive security controls.
+
+## Architecture Overview
+
+<CardGroup cols={3}>
+  <Card title="Multer Middleware" icon="upload">
+    Disk storage with dynamic folder creation
+  </Card>
+  <Card title="File Validation" icon="shield-check">
+    MIME type filtering and size limits
+  </Card>
+  <Card title="Unique Naming" icon="fingerprint">
+    Timestamp-based naming to prevent collisions
+  </Card>
+</CardGroup>
+
+## Storage Configuration
+
+The system uses a factory function to create storage configurations for different modules:
+
+```javascript
+// From uploadMiddleware.js:5-27
+import multer from 'multer';
+import path from 'path';
+import fs from 'fs';
+
+// Helper function for dynamic storage configurations
+const createStorage = (folderName) => {
+    // Safe absolute path for cPanel and local (e.g., /public/uploads/solicitudes)
+    const uploadPath = path.join(process.cwd(), 'public', 'uploads', folderName);
+    
+    // Create folder if it doesn't exist (useful for first deployment)
+    if (!fs.existsSync(uploadPath)) {
+        fs.mkdirSync(uploadPath, { recursive: true });
+    }
+    
+    return multer.diskStorage({
+        destination: (req, file, cb) => {
+            cb(null, uploadPath);
+        },
+        filename: (req, file, cb) => {
+            // Unique name: timestamp + random number + original extension
+            const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+            const ext = path.extname(file.originalname);
+            const basename = path.basename(file.originalname, ext);
+            cb(null, `${basename}-${uniqueSuffix}${ext}`);
+        }
+    });
+};
+```
+
+<Info>
+**Storage Path Structure:**
+```
+/public
+  /uploads
+    /solicitudes    - Request attachments
+    /comunicados    - Company announcements
+    /documentos     - General documents
+```
+</Info>
+
+## File Type Validation
+
+The middleware includes MIME type filtering to allow only specific file types:
+
+```javascript
+// From uploadMiddleware.js:29-51
+const fileFilter = (req, file, cb) => {
+    const allowedTypes = [
+        // Documents
+        'application/pdf',
+        'application/msword', // .doc
+        'application/vnd.openxmlformats-officedocument.wordprocessingml.document', // .docx
+        // Images
+        'image/jpeg', // .jpg, .jpeg
+        'image/png', // .png
+        'image/webp',
+        // Spreadsheets
+        'application/vnd.ms-excel', // .xls
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', // .xlsx
+    ];
+    
+    if (allowedTypes.includes(file.mimetype)) {
+        cb(null, true);
+    } else {
+        cb(
+            new Error('Tipo de archivo no permitido. Solo se aceptan PDF y documentos Word.'), 
+            false
+        );
+    }
+};
+```
+
+<Warning>
+**Allowed File Types:**
+- PDF documents (.pdf)
+- Word documents (.doc, .docx)
+- Images (.jpg, .jpeg, .png, .webp)
+- Excel spreadsheets (.xls, .xlsx)
+
+Attempts to upload other file types will be rejected.
+</Warning>
+
+## Upload Middleware Configurations
+
+The system exports separate middleware instances for different modules:
+
+### Solicitud (Request) Uploads
+
+```javascript
+// From uploadMiddleware.js:54-57
+export const uploadSolicitud = multer({ 
+    storage: createStorage('solicitudes'),
+    limits: { fileSize: 10 * 1024 * 1024 } // 10MB
+});
+```
+
+Used for attachments to employee requests (vacations, permissions, etc.).
+
+### Comunicado (Announcement) Uploads
+
+```javascript
+// From uploadMiddleware.js:59-62
+export const uploadComunicado = multer({ 
+    storage: createStorage('comunicados'),
+    limits: { fileSize: 5 * 1024 * 1024 } // 5MB
+});
+```
+
+Used for company announcements and internal communications.
+
+### General Document Uploads
+
+```javascript
+// From uploadMiddleware.js:64-67
+export const uploadDocumento = multer({ 
+    storage: createStorage('documentos'),
+    limits: { fileSize: 20 * 1024 * 1024 } // 20MB
+});
+```
+
+Used for general document management with a higher size limit.
+
+<CardGroup cols={3}>
+  <Card title="Solicitudes" icon="file-circle-check">
+    10MB limit for request attachments
+  </Card>
+  <Card title="Comunicados" icon="bullhorn">
+    5MB limit for announcements
+  </Card>
+  <Card title="Documentos" icon="file">
+    20MB limit for general documents
+  </Card>
+</CardGroup>
+
+## Usage in Routes
+
+### Single File Upload
+
+```javascript
+import { uploadSolicitud } from '../middleware/uploadMiddleware.js';
+
+// Upload single file with field name 'documento'
+router.post(
+    '/solicitudes',
+    authenticate,
+    uploadSolicitud.single('documento'),
+    solicitudController.createSolicitud
+);
+```
+
+The uploaded file will be available in the controller as:
+
+```javascript
+export const createSolicitud = async (req, res) => {
+    const { id_tipo_solicitud, fecha_inicio, fecha_fin, descripcion_solicitud } = req.body;
+    
+    // Access uploaded file
+    const documento_url = req.file ? `/uploads/solicitudes/${req.file.filename}` : null;
+    
+    // Use documento_url when creating the request
+    const nuevaSolicitud = await solicitudService.createSolicitud({
+        // ... other fields
+        documento_url
+    });
+    
+    return res.status(201).json({ solicitud: nuevaSolicitud });
+};
+```
+
+### Multiple File Upload
+
+```javascript
+// Upload multiple files (max 5) with field name 'documentos'
+router.post(
+    '/documentos/batch',
+    authenticate,
+    uploadDocumento.array('documentos', 5),
+    documentoController.uploadMultiple
+);
+```
+
+Access multiple files:
+
+```javascript
+export const uploadMultiple = async (req, res) => {
+    // req.files is an array of uploaded files
+    const documentUrls = req.files.map(file => 
+        `/uploads/documentos/${file.filename}`
+    );
+    
+    return res.status(201).json({ 
+        message: `${documentUrls.length} archivos subidos exitosamente`,
+        urls: documentUrls 
+    });
+};
+```
+
+### Multiple Fields
+
+```javascript
+// Upload from multiple fields
+router.post(
+    '/perfil/update',
+    authenticate,
+    uploadDocumento.fields([
+        { name: 'foto_perfil', maxCount: 1 },
+        { name: 'documento_identidad', maxCount: 1 }
+    ]),
+    perfilController.updateProfile
+);
+```
+
+```javascript
+export const updateProfile = async (req, res) => {
+    // Access files by field name
+    const fotoPerfil = req.files['foto_perfil'] ? req.files['foto_perfil'][0] : null;
+    const documentoId = req.files['documento_identidad'] ? req.files['documento_identidad'][0] : null;
+    
+    const updateData = {
+        img_perfil: fotoPerfil ? `/uploads/documentos/${fotoPerfil.filename}` : undefined,
+        documento_identidad_url: documentoId ? `/uploads/documentos/${documentoId.filename}` : undefined
+    };
+    
+    // Update profile...
+};
+```
+
+## Error Handling
+
+### File Size Exceeded
+
+```javascript
+import multer from 'multer';
+
+router.post('/upload', uploadSolicitud.single('file'), (error, req, res, next) => {
+    if (error instanceof multer.MulterError) {
+        if (error.code === 'LIMIT_FILE_SIZE') {
+            return res.status(400).json({
+                message: 'Archivo demasiado grande. Máximo 10MB permitido.'
+            });
+        }
+        return res.status(400).json({ message: error.message });
+    } else if (error) {
+        return res.status(400).json({ message: error.message });
+    }
+    next();
+});
+```
+
+### Invalid File Type
+
+The `fileFilter` function automatically rejects invalid file types:
+
+```javascript
+// Error response for invalid file type
+{
+    "message": "Tipo de archivo no permitido. Solo se aceptan PDF y documentos Word."
+}
+```
+
+### Missing File
+
+```javascript
+export const createSolicitud = async (req, res) => {
+    // Check if file is required but not provided
+    if (requiresDocument && !req.file) {
+        return res.status(400).json({
+            message: 'Este tipo de solicitud requiere un documento adjunto.'
+        });
+    }
+    
+    // Continue processing...
+};
+```
+
+## File Naming Convention
+
+Uploaded files follow this naming pattern:
+
+```
+{original-basename}-{timestamp}-{random-number}.{extension}
+```
+
+**Example:**
+```
+certificado-medico-1709123456789-847362819.pdf
+```
+
+<Info>
+The combination of timestamp and random number ensures filename uniqueness and prevents overwriting existing files.
+</Info>
+
+## Security Considerations
+
+<CardGroup cols={2}>
+  <Card title="MIME Type Validation" icon="filter">
+    Only whitelisted file types are accepted
+  </Card>
+  <Card title="File Size Limits" icon="scale-balanced">
+    Prevents resource exhaustion from large files
+  </Card>
+  <Card title="Unique Filenames" icon="shield">
+    Prevents path traversal and overwrite attacks
+  </Card>
+  <Card title="Separate Directories" icon="folder-tree">
+    Isolates different file types by purpose
+  </Card>
+</CardGroup>
+
+### Additional Security Best Practices
+
+<Warning>
+**Production Recommendations:**
+
+1. **Virus Scanning**: Implement antivirus scanning for uploaded files
+2. **CDN Integration**: Serve files through a CDN with signed URLs
+3. **Access Control**: Validate user permissions before serving files
+4. **Metadata Stripping**: Remove EXIF data from images
+5. **Content-Type Headers**: Set proper Content-Type when serving files
+6. **Rate Limiting**: Limit upload requests per user per time period
+</Warning>
+
+## Serving Uploaded Files
+
+Static file serving for uploads:
+
+```javascript
+// In your main app.js or server.js
+import express from 'express';
+import path from 'path';
+
+const app = express();
+
+// Serve uploaded files statically
+app.use('/uploads', express.static(path.join(process.cwd(), 'public', 'uploads')));
+```
+
+With authentication middleware:
+
+```javascript
+// Protected file serving
+app.use('/uploads/solicitudes', authenticate, express.static(
+    path.join(process.cwd(), 'public', 'uploads', 'solicitudes')
+));
+```
+
+## File Cleanup
+
+Implement cleanup for rejected requests:
+
+```javascript
+import fs from 'fs';
+import path from 'path';
+
+export const deleteUploadedFile = (filePath) => {
+    const fullPath = path.join(process.cwd(), 'public', filePath);
+    
+    if (fs.existsSync(fullPath)) {
+        fs.unlinkSync(fullPath);
+        console.log(`Deleted file: ${filePath}`);
+    }
+};
+
+// Usage in rejection handler
+export const rechazarSolicitud = async (req, res) => {
+    const solicitud = await solicitudService.getSolicitudById(id);
+    
+    // Delete associated document if request is rejected
+    if (solicitud.documento_url) {
+        deleteUploadedFile(solicitud.documento_url);
+    }
+    
+    // Continue with rejection...
+};
+```
+
+## Frontend Integration
+
+### Using FormData
+
+```javascript
+const uploadRequestDocument = async (solicitudData, file) => {
+    const formData = new FormData();
+    
+    // Append text fields
+    formData.append('id_tipo_solicitud', solicitudData.id_tipo_solicitud);
+    formData.append('fecha_inicio', solicitudData.fecha_inicio);
+    formData.append('fecha_fin', solicitudData.fecha_fin);
+    formData.append('descripcion_solicitud', solicitudData.descripcion_solicitud);
+    
+    // Append file
+    if (file) {
+        formData.append('documento', file);
+    }
+    
+    const response = await fetch('/api/solicitudes', {
+        method: 'POST',
+        headers: {
+            'Authorization': `Bearer ${token}`
+            // Don't set Content-Type - browser will set it with boundary
+        },
+        body: formData
+    });
+    
+    return response.json();
+};
+```
+
+### React Example
+
+```jsx
+import { useState } from 'react';
+
+function SolicitudForm() {
+    const [file, setFile] = useState(null);
+    
+    const handleSubmit = async (e) => {
+        e.preventDefault();
+        
+        const formData = new FormData();
+        formData.append('id_tipo_solicitud', 1);
+        formData.append('fecha_inicio', '2026-03-15');
+        formData.append('fecha_fin', '2026-03-20');
+        formData.append('descripcion_solicitud', 'Vacaciones');
+        
+        if (file) {
+            formData.append('documento', file);
+        }
+        
+        const response = await fetch('/api/solicitudes', {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${token}`
+            },
+            body: formData
+        });
+        
+        if (response.ok) {
+            alert('Solicitud creada exitosamente');
+        }
+    };
+    
+    return (
+        <form onSubmit={handleSubmit}>
+            <input 
+                type="file" 
+                onChange={(e) => setFile(e.target.files[0])}
+                accept=".pdf,.doc,.docx"
+            />
+            <button type="submit">Enviar Solicitud</button>
+        </form>
+    );
+}
+```
+
+## Related Resources
+
+<CardGroup cols={2}>
+  <Card title="Request Workflow" icon="diagram-project" href="/concepts/request-workflow">
+    Learn how file uploads integrate with the request lifecycle
+  </Card>
+  <Card title="API Reference" icon="book" href="/api/requests/overview">
+    View the complete API documentation for file upload endpoints
+  </Card>
+</CardGroup>

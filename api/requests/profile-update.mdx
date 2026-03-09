@@ -1,0 +1,238 @@
+---
+title: 'Request Profile Update'
+api: 'POST /api/solicitudes/actualizacion-perfil'
+description: 'Request changes to profile information (phone, address, or profile image)'
+---
+
+## Endpoint
+
+```
+POST /api/solicitudes/actualizacion-perfil
+```
+
+This endpoint allows employees to request updates to their profile information. Changes require administrator approval before being applied to the employee record.
+
+## Updatable Fields
+
+<CardGroup cols={3}>
+  <Card title="Phone Number" icon="phone">
+    Update contact phone number
+  </Card>
+  <Card title="Address" icon="location-dot">
+    Update residential address
+  </Card>
+  <Card title="Profile Image" icon="image">
+    Update profile picture URL
+  </Card>
+</CardGroup>
+
+## Request Body
+
+<ParamField body="telefono" type="string">
+  New phone number
+  
+  Example: `"+1234567890"`
+</ParamField>
+
+<ParamField body="direccion" type="string">
+  New residential address
+  
+  Example: `"123 Main St, City, Country"`
+</ParamField>
+
+<ParamField body="img_perfil" type="string">
+  New profile image URL
+  
+  Example: `"https://example.com/images/profile.jpg"`
+</ParamField>
+
+<Note>
+  **At least one field is required**. You can update one, two, or all three fields in a single request.
+</Note>
+
+## Response
+
+<ResponseField name="mensaje" type="string">
+  Success message confirming the request was created
+</ResponseField>
+
+<ResponseField name="id_solicitud" type="number">
+  Unique identifier for the profile update request
+</ResponseField>
+
+## Code Examples
+
+<CodeGroup>
+```javascript JavaScript
+const token = 'your_jwt_token';
+
+const profileUpdate = {
+  telefono: '+1234567890',
+  direccion: '456 New Street, City, State',
+  img_perfil: 'https://example.com/images/new-profile.jpg'
+};
+
+const response = await fetch('/api/solicitudes/actualizacion-perfil', {
+  method: 'POST',
+  headers: {
+    'Authorization': `Bearer ${token}`,
+    'Content-Type': 'application/json'
+  },
+  body: JSON.stringify(profileUpdate)
+});
+
+const data = await response.json();
+console.log(data);
+```
+
+```python Python
+import requests
+import json
+
+token = 'your_jwt_token'
+headers = {
+    'Authorization': f'Bearer {token}',
+    'Content-Type': 'application/json'
+}
+
+profile_update = {
+    'telefono': '+1234567890',
+    'direccion': '456 New Street, City, State',
+    'img_perfil': 'https://example.com/images/new-profile.jpg'
+}
+
+response = requests.post(
+    '/api/solicitudes/actualizacion-perfil',
+    headers=headers,
+    data=json.dumps(profile_update)
+)
+data = response.json()
+print(data)
+```
+
+```bash cURL
+curl -X POST "/api/solicitudes/actualizacion-perfil" \
+  -H "Authorization: Bearer your_jwt_token" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "telefono": "+1234567890",
+    "direccion": "456 New Street, City, State",
+    "img_perfil": "https://example.com/images/new-profile.jpg"
+  }'
+```
+</CodeGroup>
+
+## Response Example
+
+```json 201 Created
+{
+  "mensaje": "Solicitud de actualización de perfil enviada correctamente para aprobación.",
+  "id_solicitud": 234
+}
+```
+
+## Error Responses
+
+<ResponseExample>
+```json 400 Bad Request - No Fields Provided
+{
+  "message": "Debe proporcionar al menos un campo (teléfono, dirección o imagen) para actualizar."
+}
+```
+
+```json 400 Bad Request - Pending Request Exists
+{
+  "error": "Ya tienes una solicitud de actualización de perfil pendiente de aprobación"
+}
+```
+
+```json 500 Internal Server Error
+{
+  "error": "Error interno del servidor al procesar la solicitud."
+}
+```
+</ResponseExample>
+
+## Validation Rules
+
+<CardGroup cols={2}>
+  <Card title="Required Fields" icon="circle-check">
+    At least one field (telefono, direccion, or img_perfil) must be provided in the request body
+  </Card>
+  <Card title="Pending Requests" icon="hourglass">
+    Employees cannot create a new profile update request if they already have one pending approval
+  </Card>
+</CardGroup>
+
+## Business Logic
+
+<Steps>
+  <Step title="Validate Input">
+    System checks that at least one field is provided
+  </Step>
+  <Step title="Check Existing Requests">
+    Verifies the employee doesn't have a pending profile update request
+  </Step>
+  <Step title="Create Request">
+    Creates a new request (type 5) with proposed changes stored in a separate table
+  </Step>
+  <Step title="Admin Approval">
+    Request enters pending state awaiting administrator approval
+  </Step>
+  <Step title="Apply Changes">
+    Upon approval, the proposed changes are applied to the employee's profile
+  </Step>
+</Steps>
+
+## Data Storage
+
+The proposed changes are stored in a separate table (`actualizacion_perfil`) linked to the main request:
+
+```javascript
+// Proposed data structure
+{
+  id_solicitud: 234,
+  datos_propuestos: {
+    telefono: '+1234567890',
+    direccion: '456 New Street, City, State',
+    img_perfil: 'https://example.com/images/new-profile.jpg'
+  }
+}
+```
+
+## Related Operations
+
+<CardGroup cols={2}>
+  <Card title="Approve Profile Update" icon="check">
+    **PUT** `/api/solicitudes/:id/aprobar`
+    
+    Admin approves the request and applies changes to employee profile
+  </Card>
+  <Card title="Reject Profile Update" icon="xmark">
+    **PUT** `/api/solicitudes/:id/rechazar`
+    
+    Admin rejects the request without applying changes
+  </Card>
+</CardGroup>
+
+## Partial Updates
+
+You can update individual fields without affecting others:
+
+```javascript
+// Update only phone number
+{
+  "telefono": "+1234567890"
+}
+
+// Update only address
+{
+  "direccion": "789 Another St, City"
+}
+
+// Update phone and address, keep current image
+{
+  "telefono": "+1234567890",
+  "direccion": "789 Another St, City"
+}
+```

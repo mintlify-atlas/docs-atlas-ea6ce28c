@@ -1,0 +1,359 @@
+---
+title: 'Environment Configuration'
+description: 'Configure environment variables for Portal Self-Service Backend API'
+---
+
+## Overview
+
+The Portal Self-Service Backend requires several environment variables to configure database connections, Azure AD authentication, server settings, and CORS policies.
+
+## Environment Variables
+
+### Server Configuration
+
+<Card title="Server Port" icon="server">
+  ```bash
+  PORT=3000
+  ```
+  
+  The port on which the Express server will listen. Defaults to `3000` if not specified.
+</Card>
+
+### Database Configuration
+
+<Note>
+  All database variables are **required** for the application to start. See the [Database Setup](/guides/database-setup) guide for detailed configuration.
+</Note>
+
+<CodeGroup>
+```bash Database Connection
+DB_USER=your_database_user
+DB_PASSWORD=your_database_password
+DB_SERVER=localhost
+DB_DATABASE=PortalSelfService
+DB_PORT=1433
+```
+
+```bash Example - Local Development
+DB_USER=sa
+DB_PASSWORD=YourStrong@Passw0rd
+DB_SERVER=localhost
+DB_DATABASE=PortalSelfService
+DB_PORT=1433
+```
+
+```bash Example - Production
+DB_USER=app_portal_user
+DB_PASSWORD=Pr0d_S3cur3_P@ssw0rd!
+DB_SERVER=sql-server-prod.database.windows.net
+DB_DATABASE=PortalSelfServiceProd
+DB_PORT=1433
+```
+</CodeGroup>
+
+| Variable | Description | Required |
+|----------|-------------|----------|
+| `DB_USER` | Database authentication username | ✅ Yes |
+| `DB_PASSWORD` | Database authentication password | ✅ Yes |
+| `DB_SERVER` | Database server hostname or IP address | ✅ Yes |
+| `DB_DATABASE` | Target database name | ✅ Yes |
+| `DB_PORT` | SQL Server port (typically 1433) | ✅ Yes |
+
+### Azure AD Authentication
+
+<Warning>
+  Azure AD configuration is **critical** for API security. All protected endpoints require valid JWT tokens issued by Microsoft Entra ID (formerly Azure AD).
+</Warning>
+
+The application uses Azure AD for authentication via JWT bearer tokens:
+
+<CodeGroup>
+```bash Azure AD Configuration
+AZURE_ISSUER_BASE_URL=https://login.microsoftonline.com/{tenant-id}/v2.0
+AZURE_AUDIENCE=api://your-api-application-id
+```
+
+```bash Example
+AZURE_ISSUER_BASE_URL=https://login.microsoftonline.com/12345678-1234-1234-1234-123456789abc/v2.0
+AZURE_AUDIENCE=api://a1b2c3d4-e5f6-7890-abcd-ef1234567890
+```
+</CodeGroup>
+
+| Variable | Description | Example |
+|----------|-------------|----------|
+| `AZURE_ISSUER_BASE_URL` | Azure AD token issuer URL including tenant ID | `https://login.microsoftonline.com/{tenant-id}/v2.0` |
+| `AZURE_AUDIENCE` | Application ID URI of your backend API registered in Azure | `api://your-backend-api-id` |
+
+#### How It's Used
+
+**Authentication Middleware** (`src/middleware/authMiddleware.js`):
+
+```javascript
+import { auth } from 'express-oauth2-jwt-bearer';
+
+const checkJwtBase = auth({
+    issuerBaseURL: process.env.AZURE_ISSUER_BASE_URL, 
+    audience: process.env.AZURE_AUDIENCE,
+});
+```
+
+**WebSocket Authentication** (`src/config/socket.js`):
+
+```javascript
+const client = jwksClient({
+    jwksUri: `${process.env.AZURE_ISSUER_BASE_URL}/discovery/v2.0/keys`
+});
+
+jwt.verify(token, getKey, {
+    audience: process.env.AZURE_AUDIENCE,
+    issuer: process.env.AZURE_ISSUER_BASE_URL
+}, async (err, decoded) => {
+    // Validation logic
+});
+```
+
+<Steps>
+  <Step title="Get Your Tenant ID">
+    1. Go to Azure Portal → Azure Active Directory
+    2. Copy the **Directory (tenant) ID**
+    3. Use format: `https://login.microsoftonline.com/{tenant-id}/v2.0`
+  </Step>
+  
+  <Step title="Get Your API Application ID">
+    1. Go to Azure Portal → App Registrations
+    2. Select your **backend API** registration
+    3. Copy the **Application ID URI** (format: `api://your-app-id`)
+  </Step>
+  
+  <Step title="Configure Environment Variable">
+    Set both `AZURE_ISSUER_BASE_URL` and `AZURE_AUDIENCE` in your `.env` file
+  </Step>
+</Steps>
+
+### Frontend Configuration
+
+<Card title="Frontend URL" icon="browser">
+  ```bash
+  FRONTEND_URL=http://localhost:5173
+  ```
+  
+  The URL of your frontend application. Used for:
+  - **CORS configuration** (API requests)
+  - **WebSocket CORS** (Socket.io connections)
+</Card>
+
+<Note>
+  The default CORS origin in `src/app.js` is `http://localhost:5173`. Update both the `FRONTEND_URL` variable and the hardcoded `corsOptions` for consistency.
+</Note>
+
+Current CORS configuration in `src/app.js`:
+
+```javascript
+const corsOptions = {
+    origin: 'http://localhost:5173', // Should match FRONTEND_URL
+    methods: 'GET,HEAD,PUT,PATCH,POST,DELETE',
+    credentials: true,
+    optionsSuccessStatus: 204
+};
+```
+
+### File Upload Configuration
+
+<Card title="Base URL" icon="link">
+  ```bash
+  BASE_URL=http://localhost:3000
+  ```
+  
+  The base URL of your backend API. Used for generating file upload URLs.
+</Card>
+
+Used in `src/controllers/uploadController.js`:
+
+```javascript
+const baseUrl = process.env.BASE_URL || 'http://localhost:3000';
+const fileUrl = `${baseUrl}/uploads/${filename}`;
+```
+
+## Complete .env Template
+
+Create a `.env` file in the root of your project with the following structure:
+
+<CodeGroup>
+```bash Development .env
+# Server Configuration
+PORT=3000
+
+# Database Configuration
+DB_USER=sa
+DB_PASSWORD=YourLocal@Passw0rd
+DB_SERVER=localhost
+DB_DATABASE=PortalSelfService
+DB_PORT=1433
+
+# Azure AD Authentication
+AZURE_ISSUER_BASE_URL=https://login.microsoftonline.com/your-tenant-id/v2.0
+AZURE_AUDIENCE=api://your-backend-api-id
+
+# Frontend Configuration
+FRONTEND_URL=http://localhost:5173
+
+# File Upload
+BASE_URL=http://localhost:3000
+```
+
+```bash Production .env
+# Server Configuration
+PORT=3000
+
+# Database Configuration
+DB_USER=prod_api_user
+DB_PASSWORD=Pr0d_S3cur3_P@ssw0rd!
+DB_SERVER=your-sql-server.database.windows.net
+DB_DATABASE=PortalSelfServiceProd
+DB_PORT=1433
+
+# Azure AD Authentication
+AZURE_ISSUER_BASE_URL=https://login.microsoftonline.com/your-tenant-id/v2.0
+AZURE_AUDIENCE=api://your-backend-api-id
+
+# Frontend Configuration
+FRONTEND_URL=https://portal.yourcompany.com
+
+# File Upload
+BASE_URL=https://api.yourcompany.com
+```
+</CodeGroup>
+
+## Environment Variable Reference Table
+
+| Variable | Type | Required | Default | Description |
+|----------|------|----------|---------|-------------|
+| `PORT` | number | No | `3000` | HTTP server port |
+| `DB_USER` | string | Yes | - | Database username |
+| `DB_PASSWORD` | string | Yes | - | Database password |
+| `DB_SERVER` | string | Yes | - | Database server hostname |
+| `DB_DATABASE` | string | Yes | - | Database name |
+| `DB_PORT` | number | Yes | - | Database port (typically 1433) |
+| `AZURE_ISSUER_BASE_URL` | string | Yes | - | Azure AD issuer URL with tenant ID |
+| `AZURE_AUDIENCE` | string | Yes | - | API application ID URI |
+| `FRONTEND_URL` | string | No | `http://localhost:5173` | Frontend application URL for CORS |
+| `BASE_URL` | string | No | `http://localhost:3000` | Backend base URL for file uploads |
+
+## Security Best Practices
+
+<CardGroup cols={2}>
+  <Card title="Never Commit .env" icon="shield-halved">
+    Add `.env` to your `.gitignore` file to prevent exposing secrets in version control.
+    
+    ```bash .gitignore
+    .env
+    .env.local
+    .env.*.local
+    ```
+  </Card>
+  
+  <Card title="Use Strong Passwords" icon="key">
+    Database passwords should be:
+    - At least 12 characters
+    - Include uppercase, lowercase, numbers, and symbols
+    - Different from development passwords
+  </Card>
+  
+  <Card title="Rotate Credentials" icon="rotate">
+    Periodically rotate:
+    - Database passwords
+    - Azure AD client secrets
+    - Any API keys
+  </Card>
+  
+  <Card title="Use Azure Key Vault" icon="vault">
+    For production deployments, consider using Azure Key Vault or similar secret management services instead of plain `.env` files.
+  </Card>
+</CardGroup>
+
+## Validation
+
+To verify your environment configuration:
+
+<Steps>
+  <Step title="Create .env File">
+    Copy the template above and fill in your values.
+  </Step>
+  
+  <Step title="Install Dependencies">
+    ```bash
+    npm install
+    ```
+  </Step>
+  
+  <Step title="Start the Application">
+    ```bash
+    npm start
+    ```
+  </Step>
+  
+  <Step title="Check Console Output">
+    Look for successful startup messages:
+    ```
+    Conexión a SQL Server establecida.
+    Servidor escuchando en http://localhost:3000
+    ```
+  </Step>
+  
+  <Step title="Test Health Endpoint">
+    ```bash
+    curl http://localhost:3000/health
+    ```
+  </Step>
+</Steps>
+
+<Warning>
+  If the database connection fails, the application will exit with code 1. Verify all `DB_*` environment variables are correct.
+</Warning>
+
+## Troubleshooting
+
+### Missing Environment Variables
+
+If you see errors about undefined environment variables:
+
+1. Ensure `.env` file exists in the project root
+2. Verify `dotenv` is loaded in `server.js`:
+   ```javascript
+   import 'dotenv/config';
+   ```
+3. Check that variable names match exactly (case-sensitive)
+
+### Azure AD Authentication Errors
+
+<Card title="Invalid Token" icon="triangle-exclamation">
+  **Symptoms**: `401 Unauthorized` or "Token inválido" errors
+  
+  **Solutions**:
+  - Verify `AZURE_ISSUER_BASE_URL` includes your correct tenant ID
+  - Ensure `AZURE_AUDIENCE` matches the Application ID URI in Azure
+  - Check that the frontend is requesting tokens with the correct scope
+  - Verify token hasn't expired
+</Card>
+
+### CORS Errors
+
+<Card title="CORS Policy Blocked" icon="ban">
+  **Symptoms**: Browser console shows CORS policy errors
+  
+  **Solutions**:
+  - Verify `FRONTEND_URL` matches your frontend application URL
+  - Update `corsOptions.origin` in `src/app.js` to use `process.env.FRONTEND_URL`
+  - Ensure frontend makes requests with `credentials: 'include'` if using cookies
+</Card>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Database Setup" icon="database" href="/guides/database-setup">
+    Configure your MSSQL database connection
+  </Card>
+  <Card title="Deployment" icon="rocket" href="/guides/deployment">
+    Deploy your application to production
+  </Card>
+</CardGroup>

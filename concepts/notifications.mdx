@@ -1,0 +1,277 @@
+---
+title: Notifications System
+description: Real-time notification delivery using EventEmitter and Socket.io
+---
+
+The Portal Self-Service Backend implements a sophisticated notification system that combines Node.js EventEmitter with Socket.io for real-time delivery to connected clients.
+
+## Architecture Overview
+
+The notification system consists of three main components:
+
+<CardGroup cols={3}>
+  <Card title="NotificationService" icon="bell">
+    Creates and persists notifications to the database
+  </Card>
+  <Card title="NotificationEmitter" icon="broadcast-tower">
+    Internal event bus for decoupling notification creation from delivery
+  </Card>
+  <Card title="Socket.io Server" icon="podcast">
+    Real-time WebSocket delivery to authenticated clients
+  </Card>
+</CardGroup>
+
+## Notification Types
+
+The system defines specific notification types for different events:
+
+```javascript
+export const TIPOS_NOTIFICACION = Object.freeze({
+    SOLICITUD_NUEVA: 1,      // New request submitted
+    SOLICITUD_APROBADA: 3,   // Request approved
+    SOLICITUD_RECHAZADA: 4,  // Request rejected
+    RECORDATORIO: 5          // Reminder notification
+});
+```
+
+## NotificationEmitter
+
+The `NotificationEmitter` is a singleton EventEmitter instance that serves as an internal event bus:
+
+```javascript
+// From notificationEmitter.js:1-11
+import { EventEmitter } from 'events';
+
+class NotificationEmitter extends EventEmitter {}
+
+// Export single instance (Singleton) for entire application
+export const notificationEmitter = new NotificationEmitter();
+
+// Define event names as constants to avoid typos
+export const EVENTOS_INTERNOS = Object.freeze({
+    NOTIFICACION_CREADA: 'NOTIFICACION_CREADA',
+});
+```
+
+<Info>
+Using a singleton pattern ensures all parts of the application share the same event emitter instance, enabling reliable event propagation.
+</Info>
+
+## Creating Notifications
+
+### Bulk Notifications (Multiple Recipients)
+
+When notifying multiple users (e.g., all HR admins about a new request), use `sendNotification`:
+
+```javascript
+// From notificationService.js:6-55
+export const sendNotification = async ({ 
+    destinatarios, // Array of recipient IDs [1, 2, ...] 
+    id_remitente = null, 
+    titulo, 
+    mensaje, 
+    id_tipo_notificacion, 
+    id_referencia = null 
+}) => {
+    try {
+        // Validate recipients array
+        if (!Array.isArray(destinatarios) || destinatarios.length === 0) {
+            console.warn('sendNotification: No se enviaron destinatarios.');
+            return [];
+        }
+        
+        // Prepare data for bulk insert
+        const notificacionesData = destinatarios.map(id_usuario => ({
+            id_usuario,
+            id_remitente,
+            titulo,
+            mensaje,
+            id_tipo_notificacion,
+            id_referencia,
+            leido: false
+        }));
+        
+        // Bulk insert - much faster than individual creates
+        const nuevasNotificaciones = await Notificacion.bulkCreate(
+            notificacionesData, 
+            { returning: true }
+        );
+        
+        // Emit Socket.io events for each notification
+        nuevasNotificaciones.forEach(notificacion => {
+            const dataToSend = notificacion.toJSON();
+            if (!dataToSend.fecha_creacion) {
+                dataToSend.fecha_creacion = new Date(); 
+            }
+            
+            notificationEmitter.emit(
+                EVENTOS_INTERNOS.NOTIFICACION_CREADA, 
+                dataToSend
+            );
+        });
+        
+        return nuevasNotificaciones;
+    } catch (error) {
+        console.error('Error masivo al crear notificaciones:', error);
+        throw error; 
+    }
+};
+```
+
+<Note>
+Using `bulkCreate` is significantly more efficient than creating notifications in a loop, especially when notifying many users simultaneously.
+</Note>
+
+### Single Notifications (One Recipient)
+
+For individual notifications (e.g., notifying a specific employee about their request status):
+
+```javascript
+// From notificationService.js:57-89
+export const sendNotificationEmployee = async ({ 
+    id_usuario,
+    id_remitente = null, 
+    titulo, 
+    mensaje, 
+    id_tipo_notificacion, 
+    id_referencia = null 
+}) => {
+    try {
+        const nuevaNotificacion = await Notificacion.create({
+            id_usuario,
+            id_remitente,
+            titulo,
+            mensaje,
+            id_tipo_notificacion,
+            id_referencia,
+            leido: false
+        });
+        
+        // Emit event for Socket.io delivery
+        notificationEmitter.emit(
+            EVENTOS_INTERNOS.NOTIFICACION_CREADA, 
+            nuevaNotificacion.toJSON()
+        );
+        
+        return nuevaNotificacion;
+    } catch (error) {
+        console.error('Error al crear notificación:', error);
+        throw error; 
+    }
+};
+```
+
+## Usage Examples
+
+### Notifying HR About New Requests
+
+```javascript
+// From solicitudController.js:186-197
+if (destinatariosRRHH.length > 0 && nuevaSolicitud) {
+    notificationService.sendNotification({
+        destinatarios: destinatariosRRHH, // Array [2, 5, 12]
+        id_remitente: id_empleado, 
+        titulo: 'Nueva Solicitud de Permiso',
+        mensaje: `${empleado.nombre} ha solicitado ${tipoSolicitud.tipo.toLowerCase()}.`, 
+        id_tipo_notificacion: TIPOS_NOTIFICACION.SOLICITUD_NUEVA,
+        id_referencia: nuevaSolicitud.id_solicitud
+    }).catch(err => console.error('Fallo silencioso en notificación masiva:', err));
+} else {
+    console.warn("No se encontraron usuarios de RRHH para notificar.");
+}
+```
+
+### Notifying Employee About Rejection
+
+```javascript
+// From solicitudController.js:313-320
+notificationService.sendNotificationEmployee({
+    id_usuario: solicitud.id_empleado,
+    id_remitente: aprobador.id_empleado, 
+    titulo: 'Respuesta de solicitud',
+    mensaje: `Tu solicitud ha sido rechazda.`, 
+    id_tipo_notificacion: TIPOS_NOTIFICACION.SOLICITUD_RECHAZADA,
+    id_referencia: solicitud.id_solicitud
+}).catch(err => console.error('Fallo silencioso en notificación masiva:', err));
+```
+
+## Event Flow
+
+The notification system follows this flow:
+
+<Steps>
+  <Step title="Notification Creation">
+    `notificationService` persists notification(s) to database
+  </Step>
+  <Step title="Event Emission">
+    Service emits `NOTIFICACION_CREADA` event on the `notificationEmitter`
+  </Step>
+  <Step title="Event Listening">
+    Socket.io server listens for `NOTIFICACION_CREADA` events
+  </Step>
+  <Step title="WebSocket Delivery">
+    Server emits `nueva_notificacion` to recipient's personal room
+  </Step>
+  <Step title="Client Reception">
+    Connected client receives real-time notification update
+  </Step>
+</Steps>
+
+## Socket.io Integration
+
+The Socket.io server listens for notification events and delivers them to connected clients:
+
+```javascript
+// From socket.js:91-97
+notificationEmitter.on(EVENTOS_INTERNOS.NOTIFICACION_CREADA, (notificacionData) => {
+    const roomDestinatario = `room_${notificacionData.id_usuario}`;
+    
+    io.to(roomDestinatario).emit('nueva_notificacion', notificacionData);
+    console.log(`[Socket] Notificación enviada a la sala ${roomDestinatario}`);
+});
+```
+
+<Info>
+Notifications are delivered to user-specific rooms (`room_{id_empleado}`), ensuring only the intended recipient receives the notification.
+</Info>
+
+## Error Handling
+
+Notification failures are handled gracefully to avoid disrupting the main business logic:
+
+```javascript
+// Fire-and-forget pattern with error catching
+notificationService.sendNotification({
+    // ... notification data
+}).catch(err => console.error('Fallo silencioso en notificación masiva:', err));
+```
+
+<Warning>
+Notification errors are logged but don't prevent the main operation (e.g., request creation) from succeeding. This prevents notification issues from blocking critical business processes.
+</Warning>
+
+## Database Schema
+
+Notifications are stored with the following key fields:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `id_usuario` | Integer | Recipient employee ID |
+| `id_remitente` | Integer | Sender employee ID (nullable) |
+| `titulo` | String | Notification title |
+| `mensaje` | String | Notification message |
+| `id_tipo_notificacion` | Integer | Type constant (see TIPOS_NOTIFICACION) |
+| `id_referencia` | Integer | Reference to related entity (e.g., solicitud ID) |
+| `leido` | Boolean | Read status (default: false) |
+| `fecha_creacion` | DateTime | Auto-generated timestamp |
+
+## Related Resources
+
+<CardGroup cols={2}>
+  <Card title="WebSockets" icon="podcast" href="/concepts/websockets">
+    Learn about Socket.io setup and real-time delivery
+  </Card>
+  <Card title="Request Workflow" icon="diagram-project" href="/concepts/request-workflow">
+    See how notifications fit into the request lifecycle
+  </Card>
+</CardGroup>

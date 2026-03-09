@@ -1,0 +1,114 @@
+---
+title: 'Requests API Overview'
+description: 'Manage employee requests including vacation, profile updates, absences, and permissions'
+icon: 'clipboard-list'
+---
+
+The Requests API allows employees to create and manage various types of requests, while administrators can approve, reject, or view pending requests.
+
+## Authentication
+
+All endpoints require authentication via JWT token. The token should be included in the request headers:
+
+```bash
+Authorization: Bearer <your_jwt_token>
+```
+
+The authenticated user's information is automatically extracted and loaded into `req.empleado`.
+
+## Request Types
+
+The API supports the following request types:
+
+<CardGroup cols={2}>
+  <Card title="Vacation" icon="umbrella-beach">
+    Request time off with automatic vacation day balance checking
+  </Card>
+  <Card title="Profile Update" icon="user-pen">
+    Request changes to phone number, address, or profile image
+  </Card>
+  <Card title="Absence" icon="calendar-xmark">
+    Report justified absences with date ranges
+  </Card>
+  <Card title="Permission" icon="clock">
+    Request special permissions for specific dates
+  </Card>
+  <Card title="Remote Work" icon="laptop-house">
+    Request to work from external locations
+  </Card>
+</CardGroup>
+
+## Request States
+
+Requests can be in one of four states:
+
+- **Pending (1)**: Request submitted, awaiting approval
+- **Approved (2)**: Request approved by administrator
+- **Rejected (3)**: Request rejected by administrator
+- **Canceled (4)**: Request canceled by the employee
+
+## Role-Based Access
+
+The API implements role-based access control:
+
+<CardGroup cols={3}>
+  <Card title="Employee" icon="user">
+    Can view own requests, create new requests, and cancel pending requests
+  </Card>
+  <Card title="Admin" icon="user-shield">
+    Can view all requests (excluding canceled), approve/reject requests, and access calendar
+  </Card>
+  <Card title="Super Admin" icon="user-crown">
+    Can view all requests including canceled, with full administrative privileges
+  </Card>
+</CardGroup>
+
+## Available Endpoints
+
+<CardGroup cols={2}>
+  <Card title="Get Requests" icon="list" href="/api/requests/get-requests">
+    Retrieve requests with pagination and filters
+  </Card>
+  <Card title="Create Request" icon="plus" href="/api/requests/create-request">
+    Create general requests (absence, permission, remote work)
+  </Card>
+  <Card title="Vacation Request" icon="umbrella-beach" href="/api/requests/vacation-request">
+    Create vacation requests with balance validation
+  </Card>
+  <Card title="Profile Update" icon="user-pen" href="/api/requests/profile-update">
+    Request profile data changes
+  </Card>
+  <Card title="Approve/Reject" icon="gavel" href="/api/requests/approve-reject">
+    Approve or reject requests (Admin only)
+  </Card>
+  <Card title="Calendar View" icon="calendar" href="/api/requests/calendar">
+    View approved requests in calendar format (Admin only)
+  </Card>
+</CardGroup>
+
+## Common Response Format
+
+Successful responses follow this structure:
+
+```json
+{
+  "status": "success",
+  "data": {
+    "solicitudes": [...],
+    "pagination": {
+      "total": 100,
+      "page": 1,
+      "limit": 25,
+      "totalPages": 4
+    }
+  }
+}
+```
+
+Error responses:
+
+```json
+{
+  "message": "Error description"
+}
+```

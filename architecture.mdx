@@ -1,0 +1,519 @@
+---
+title: "Architecture"
+description: "Understanding the Portal Self-Service Backend API architecture and design patterns"
+---
+
+## System Overview
+
+The Portal Self-Service Backend API is built with a modern, scalable architecture using Node.js and Microsoft SQL Server. The system follows an MVC-style pattern with clear separation of concerns.
+
+<CardGroup cols={2}>
+  <Card title="Technology Stack" icon="layer-group">
+    - **Runtime**: Node.js (ES Modules)
+    - **Framework**: Express.js v5.1.0
+    - **Database**: Microsoft SQL Server
+    - **ORM**: Sequelize v6.37.7
+    - **Real-time**: Socket.io v4.8.3
+    - **Authentication**: Azure AD (OAuth2 JWT)
+  </Card>
+
+  <Card title="Key Features" icon="star">
+    - JWT-based authentication
+    - Role-based access control (RBAC)
+    - Real-time notifications
+    - Request approval workflows
+    - File upload management
+    - Swagger API documentation
+  </Card>
+</CardGroup>
+
+## Architecture Layers
+
+The application follows a layered architecture pattern:
+
+```
+┌─────────────────────────────────────┐
+│         HTTP/WebSocket              │
+│      (Express + Socket.io)          │
+└─────────────────┬───────────────────┘
+                  │
+┌─────────────────▼───────────────────┐
+│         Middleware Layer            │
+│  (Auth, User Loading, RBAC)         │
+└─────────────────┬───────────────────┘
+                  │
+┌─────────────────▼───────────────────┐
+│          Routes Layer               │
+│    (API Endpoint Definitions)       │
+└─────────────────┬───────────────────┘
+                  │
+┌─────────────────▼───────────────────┐
+│        Controllers Layer            │
+│   (Request Handling & Validation)   │
+└─────────────────┬───────────────────┘
+                  │
+┌─────────────────▼───────────────────┐
+│         Services Layer              │
+│     (Business Logic & Transactions) │
+└─────────────────┬───────────────────┘
+                  │
+┌─────────────────▼───────────────────┐
+│          Models Layer               │
+│    (Sequelize ORM + SQL Server)     │
+└─────────────────────────────────────┘
+```
+
+## Core Components
+
+### 1. Server Initialization
+
+The server bootstraps in `server.js`, setting up both HTTP and WebSocket servers:
+
+```javascript server.js
+import app from './src/app.js';
+import { poolPromise } from './src/config/db.config.js';
+import { initSocket } from './src/config/socket.js';
+import http from 'http';
+
+const server = http.createServer(app);
+initSocket(server);
+
+await poolPromise; // Wait for database connection
+server.listen(PORT);
+```
+
+Key aspects:
+- Creates HTTP server wrapping Express app (server.js:14)
+- Initializes Socket.io on the same server (server.js:17)
+- Ensures database connectivity before accepting requests (server.js:22)
+
+### 2. Express Application
+
+The Express app is configured in `src/app.js`:
+
+```javascript src/app.js
+const app = express();
+app.use(cors(corsOptions));
+app.use(express.json());
+
+// Swagger documentation
+app.use('/docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
+
+// Static file serving
+app.use('/uploads', express.static(path.join(process.cwd(), 'public', 'uploads')));
+
+// API routes
+app.use('/api', indexRoutes);
+```
+
+Configuration highlights:
+- CORS enabled for frontend communication (src/app.js:12-17)
+- JSON body parsing (src/app.js:21)
+- Swagger UI at `/docs` endpoint (src/app.js:24)
+- Static file serving for uploads (src/app.js:28)
+
+### 3. Database Configuration
+
+Sequelize ORM connects to SQL Server with connection pooling:
+
+```javascript src/config/db.config.js
+const config = {
+    user: process.env.DB_USER,
+    password: process.env.DB_PASSWORD,
+    server: process.env.DB_SERVER,
+    database: process.env.DB_DATABASE,
+    port: parseInt(process.env.DB_PORT, 10),
+    options: {
+        trustServerCertificate: true,
+        enableArithAbort: true
+    },
+    pool: {
+        max: 10,
+        min: 0,
+        idleTimeoutMillis: 30000
+    }
+};
+```
+
+Database features:
+- Connection pooling (max 10 connections) (src/config/db.config.js:13-17)
+- Automatic timezone handling (UTC-6) (src/models/index.js:35)
+- Sequelize ORM with model associations (src/models/index.js:65-69)
+
+## Authentication Flow
+
+The API uses Azure AD for authentication with a multi-step middleware chain:
+
+<Steps>
+  <Step title="Token Validation">
+    The `authenticateAndExtract` middleware validates the JWT token from Azure AD:
+
+    ```javascript src/middleware/authMiddleware.js
+    const checkJwtBase = auth({
+        issuerBaseURL: process.env.AZURE_ISSUER_BASE_URL,
+        audience: process.env.AZURE_AUDIENCE,
+    });
+    ```
+
+    This middleware:
+    - Validates JWT signature using Azure's JWKS endpoint (src/middleware/authMiddleware.js:13-19)
+    - Verifies token issuer and audience claims
+    - Extracts user identity from token payload (src/middleware/authMiddleware.js:41-50)
+  </Step>
+
+  <Step title="User Loading">
+    The `cargarUsuario` middleware loads the full user record from the database:
+
+    ```javascript src/middleware/cargarUsuario.js
+    const empleado = await db.Empleado.findOne({
+        where: { azure_oid: azureId },
+        include: [
+            { model: db.Rol_empleado, as: 'rol' },
+            { model: db.Vacaciones, as: 'vacaciones' }
+        ]
+    });
+    req.empleado = empleado;
+    ```
+
+    This step:
+    - Finds user by Azure Object ID (src/middleware/cargarUsuario.js:16)
+    - Loads role and vacation data (src/middleware/cargarUsuario.js:17-20)
+    - Attaches full user object to request (src/middleware/cargarUsuario.js:30)
+  </Step>
+
+  <Step title="Role-Based Access Control">
+    The `verificarRol` middleware enforces role-based permissions:
+
+    ```javascript src/routes/solicitudRoutes.js
+    router.get('/admin/pendientes', 
+        verificarRol(PERMISOS.SOLO_ADMINS), 
+        solicitudController.getSolicitudesPendientes
+    );
+    ```
+
+    The system supports three roles:
+    - **EMPLEADO**: Standard employee access
+    - **ADMIN**: HR administrator access
+    - **SUPER_ADMIN**: Full system access
+  </Step>
+</Steps>
+
+### Middleware Chain Example
+
+Here's how the middleware chain works for protected routes:
+
+```javascript src/routes/solicitudRoutes.js
+router.use(authenticateAndExtract);  // 1. Validate JWT
+router.use(cargarUsuario);            // 2. Load user from DB
+
+router.get('/', solicitudController.getSolicitudes);  // 3. Execute controller
+```
+
+## Request Approval Workflow
+
+The system implements a sophisticated approval workflow for employee requests (vacation, absence, profile updates):
+
+<Steps>
+  <Step title="Request Creation">
+    Employees create requests through the API:
+
+    ```javascript src/controllers/solicitudController.js (line 135)
+    export const createSolicitud = async (req, res) => {
+        const { id_tipo_solicitud, fecha_inicio, fecha_fin, 
+                descripcion_solicitud, documento_url } = req.body;
+        
+        const empleado = req.empleado;
+        // Validate and create request...
+    }
+    ```
+
+    The system:
+    - Validates request data and date ranges
+    - Calculates requested days for time-off requests
+    - Creates request with PENDING status (id_estado_solicitud: 1)
+  </Step>
+
+  <Step title="Notification Dispatch">
+    Administrators are notified via real-time notifications:
+
+    ```javascript src/controllers/solicitudController.js (line 187)
+    notificationService.sendNotification({
+        destinatarios: destinatariosRRHH,
+        id_remitente: id_empleado,
+        titulo: 'Nueva Solicitud de Permiso',
+        mensaje: `${empleado.nombre} ha solicitado ${tipoSolicitud.tipo.toLowerCase()}.`,
+        id_tipo_notificacion: TIPOS_NOTIFICACION.SOLICITUD_NUEVA,
+        id_referencia: nuevaSolicitud.id_solicitud
+    });
+    ```
+
+    Notifications are sent through Socket.io for instant delivery.
+  </Step>
+
+  <Step title="Admin Review">
+    Admins can approve or reject requests:
+
+    ```javascript src/controllers/solicitudController.js (line 468)
+    export const aprobarSolicitud = async (req, res) => {
+        const { id } = req.params;
+        const { retroalimentacion } = req.body;
+        
+        // Validate request state
+        if (solicitud.id_estado_solicitud !== ESTADOS_SOLICITUD.PENDIENTE) {
+            return res.status(400).json({ 
+                message: 'La solicitud ya ha sido procesada' 
+            });
+        }
+        // Process approval...
+    }
+    ```
+
+    The approval logic:
+    - Validates request is still pending (src/controllers/solicitudController.js:487-489)
+    - Prevents self-approval (commented for testing)
+    - Handles different request types with specific logic (src/controllers/solicitudController.js:509-572)
+  </Step>
+
+  <Step title="Transaction Processing">
+    Approvals use database transactions for data consistency:
+
+    For vacation requests:
+    - Deducts days from employee's vacation balance
+    - Updates request status to APPROVED
+    - Records approval metadata
+
+    For profile updates:
+    - Applies proposed changes to employee record
+    - Updates request status
+    - Maintains audit trail
+  </Step>
+</Steps>
+
+<Info>
+  All state changes are atomic - either all operations succeed or none do, ensuring data integrity.
+</Info>
+
+## Real-time Notifications with Socket.io
+
+The system uses Socket.io for instant notification delivery:
+
+### Socket Authentication
+
+```javascript src/config/socket.js (line 37)
+io.use((socket, next) => {
+    const token = socket.handshake.auth.token;
+    
+    jwt.verify(token, getKey, {
+        audience: process.env.AZURE_AUDIENCE,
+        issuer: process.env.AZURE_ISSUER_BASE_URL
+    }, async (err, decoded) => {
+        // Validate token and load user
+        const empleado = await Empleado.findOne({ 
+            where: { correo: userEmail } 
+        });
+        socket.userId = empleado.id_empleado;
+        next();
+    });
+});
+```
+
+Key features:
+- JWT authentication for WebSocket connections (src/config/socket.js:39-44)
+- User identification via Azure AD token (src/config/socket.js:58-66)
+- Personal rooms for each user (src/config/socket.js:79-84)
+
+### Event Flow
+
+```javascript src/config/socket.js (line 92)
+notificationEmitter.on(EVENTOS_INTERNOS.NOTIFICACION_CREADA, (notificacionData) => {
+    const roomDestinatario = `room_${notificacionData.id_usuario}`;
+    io.to(roomDestinatario).emit('nueva_notificacion', notificacionData);
+});
+```
+
+Notifications are:
+1. Created by the notification service
+2. Emitted via internal EventEmitter
+3. Delivered to user's Socket.io room
+4. Received by connected clients in real-time
+
+## API Routes Structure
+
+Routes are organized by resource type:
+
+```javascript src/routes/indexRoutes.js
+router.use('/empleados', empleadoRoutes);
+router.use('/solicitudes', solicitudRoutes);
+router.use('/faq', faqRoutes);
+router.use('/comunicados', comunicadoRoutes);
+router.use('/documentos', documentacionRoutes);
+router.use('/dashboard-admin', dashboardRoutes);
+router.use('/notificaciones', notificacionRoutes);
+router.use('/vacaciones', vacacionesRoutes);
+```
+
+All routes are prefixed with `/api` (src/app.js:34).
+
+### Route Protection Example
+
+```javascript src/routes/solicitudRoutes.js
+router.use(authenticateAndExtract);  // All routes require auth
+router.use(cargarUsuario);            // Load user data
+
+router.get('/', solicitudController.getSolicitudes);
+router.get('/admin/pendientes', 
+    verificarRol(PERMISOS.SOLO_ADMINS), 
+    solicitudController.getSolicitudesPendientes
+);
+```
+
+## Service Layer Pattern
+
+Controllers delegate business logic to service modules:
+
+```javascript
+Controller (solicitudController.js)
+    ↓
+Service (solicitudService.js) - Business logic & transactions
+    ↓
+Model (SolicitudModel.js) - Database operations
+```
+
+This separation ensures:
+- **Controllers**: Handle HTTP concerns (validation, responses)
+- **Services**: Implement business rules and transactions
+- **Models**: Define database schema and relationships
+
+<Warning>
+  Never put business logic directly in controllers. Always use service layer for reusability and testability.
+</Warning>
+
+## Data Models
+
+The system uses Sequelize models with associations:
+
+```javascript src/models/index.js
+// Initialize models
+db.Empleado = EmpleadoModel(sequelize);
+db.Solicitud = SolicitudModel(sequelize);
+db.Vacaciones = VacacionesModel(sequelize);
+db.Rol_empleado = RolModel(sequelize);
+
+// Set up associations
+Object.keys(db).forEach(modelName => {
+    if (db[modelName].associate) {
+        db[modelName].associate(db);
+    }
+});
+```
+
+Key models:
+- **Empleado**: Employee records with Azure AD integration
+- **Solicitud**: Request/application records
+- **Vacaciones**: Vacation balance tracking
+- **Notificacion**: Notification system
+
+## Security Considerations
+
+<CardGroup cols={2}>
+  <Card title="Authentication" icon="lock">
+    - JWT tokens validated against Azure AD
+    - Token signature verification using JWKS
+    - Token expiration enforced
+    - User existence verified in local database
+  </Card>
+
+  <Card title="Authorization" icon="shield-check">
+    - Role-based access control (RBAC)
+    - Resource ownership validation
+    - Admin-only endpoint protection
+    - Self-approval prevention (commented for testing)
+  </Card>
+
+  <Card title="Data Protection" icon="database">
+    - SQL injection prevention via Sequelize ORM
+    - Environment variable configuration
+    - Encrypted database connections (TLS)
+    - Connection pooling for resource management
+  </Card>
+
+  <Card title="Input Validation" icon="check-double">
+    - Request body validation in controllers
+    - Date range validation
+    - State transition validation
+    - File upload restrictions
+  </Card>
+</CardGroup>
+
+## Performance Optimization
+
+### Database Connection Pooling
+
+The application uses connection pooling to manage database resources efficiently:
+
+```javascript src/config/db.config.js
+pool: {
+    max: 10,              // Maximum connections
+    min: 0,               // Minimum connections
+    idleTimeoutMillis: 30000  // Connection timeout
+}
+```
+
+### Eager Loading
+
+Related data is loaded efficiently using Sequelize includes:
+
+```javascript src/middleware/cargarUsuario.js
+const empleado = await db.Empleado.findOne({
+    include: [
+        { model: db.Rol_empleado, as: 'rol' },
+        { model: db.Vacaciones, as: 'vacaciones' }
+    ]
+});
+```
+
+This prevents N+1 query problems.
+
+## Error Handling
+
+The application implements consistent error handling:
+
+```javascript
+try {
+    // Business logic
+} catch (error) {
+    console.error('Error al crear la solicitud:', error);
+    return res.status(500).json({ 
+        message: 'Error interno del servidor' 
+    });
+}
+```
+
+HTTP status codes:
+- **200**: Success
+- **201**: Resource created
+- **400**: Bad request / validation error
+- **401**: Unauthorized (invalid token)
+- **403**: Forbidden (insufficient permissions)
+- **404**: Resource not found
+- **500**: Internal server error
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="API Reference" icon="book" href="/api/authentication">
+    Explore detailed endpoint documentation
+  </Card>
+
+  <Card title="Quickstart" icon="rocket" href="/quickstart">
+    Set up your development environment
+  </Card>
+
+  <Card title="Authentication Guide" icon="key" href="/auth/azure-ad-setup">
+    Learn about Azure AD integration
+  </Card>
+
+  <Card title="Database Setup" icon="database" href="/guides/database-setup">
+    Configure database connections
+  </Card>
+</CardGroup>

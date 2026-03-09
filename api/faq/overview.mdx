@@ -1,0 +1,258 @@
+---
+title: 'FAQ API'
+description: 'Manage frequently asked questions and answers'
+icon: 'circle-question'
+---
+
+## Overview
+
+The FAQ API provides access to frequently asked questions and their answers. All users can retrieve FAQs, while administrators can create, update, and delete them.
+
+## Endpoints
+
+<CardGroup cols={2}>
+  <Card title="Get FAQs" icon="list" href="#get-faqs">
+    Retrieve all FAQs with optional search
+  </Card>
+  <Card title="Create FAQ" icon="plus" href="#create-faq">
+    Add a new FAQ entry (Admin only)
+  </Card>
+  <Card title="Update FAQ" icon="pen-to-square" href="#update-faq">
+    Modify an existing FAQ (Admin only)
+  </Card>
+  <Card title="Delete FAQ" icon="trash" href="#delete-faq">
+    Remove an FAQ entry (Admin only)
+  </Card>
+</CardGroup>
+
+---
+
+## Get FAQs
+
+<CodeGroup>
+```bash GET /api/faq
+curl -X GET "https://api.example.com/api/faq?busqueda=vacation" \
+  -H "Authorization: Bearer YOUR_TOKEN"
+```
+</CodeGroup>
+
+Retrieves all FAQs, with optional search filtering across questions and answers.
+
+### Query Parameters
+
+<ParamField query="busqueda" type="string" optional>
+  Search term to filter FAQs by question or answer content
+</ParamField>
+
+### Response
+
+<CodeGroup>
+```json 200 OK
+[
+  {
+    "id_faq": 1,
+    "id_categoria": 1,
+    "pregunta": "¿Cómo solicito vacaciones?",
+    "respuesta": "Debes ingresar al portal y acceder a la sección de Vacaciones. Luego selecciona las fechas deseadas y envía tu solicitud.",
+    "fecha_creacion": "2024-01-10T08:00:00Z"
+  },
+  {
+    "id_faq": 2,
+    "id_categoria": 1,
+    "pregunta": "¿Cuántos días de vacaciones tengo?",
+    "respuesta": "Puedes consultar tu saldo de vacaciones en el Dashboard de Vacaciones.",
+    "fecha_creacion": "2024-01-12T09:30:00Z"
+  }
+]
+```
+
+```json 404 Not Found
+{
+  "message": "No se encontraron resultados para la búsqueda."
+}
+```
+
+```json 500 Error
+{
+  "message": "Error interno del servidor al obtener FAQs."
+}
+```
+</CodeGroup>
+
+---
+
+## Create FAQ
+
+<CodeGroup>
+```bash POST /api/faq/admin
+curl -X POST "https://api.example.com/api/faq/admin" \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "id_categoria": 1,
+    "pregunta": "¿Cómo cambio mi contraseña?",
+    "respuesta": "Ve a Configuración > Seguridad > Cambiar Contraseña."
+  }'
+```
+</CodeGroup>
+
+<Note>
+  This endpoint requires **Admin** or **RRHH** role permissions.
+</Note>
+
+### Request Body
+
+<ParamField body="id_categoria" type="integer" required>
+  Category ID for the FAQ
+</ParamField>
+
+<ParamField body="pregunta" type="string" required>
+  The question text
+</ParamField>
+
+<ParamField body="respuesta" type="string" required>
+  The answer text
+</ParamField>
+
+### Response
+
+<CodeGroup>
+```json 201 Created
+{
+  "message": "FAQ creada exitosamente.",
+  "faq": {
+    "id_faq": 25,
+    "id_categoria": 1,
+    "pregunta": "¿Cómo cambio mi contraseña?",
+    "respuesta": "Ve a Configuración > Seguridad > Cambiar Contraseña.",
+    "fecha_creacion": "2024-03-09T15:45:00Z"
+  }
+}
+```
+
+```json 400 Bad Request
+{
+  "message": "Faltan campos obligatorios: categoría, preguntas y respuestas."
+}
+```
+
+```json 500 Error
+{
+  "message": "Error interno del servidor al crear FAQ."
+}
+```
+</CodeGroup>
+
+---
+
+## Update FAQ
+
+<CodeGroup>
+```bash PUT /api/faq/admin/:id
+curl -X PUT "https://api.example.com/api/faq/admin/25" \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "id_categoria": 2,
+    "pregunta": "¿Cómo actualizo mi contraseña?",
+    "respuesta": "Dirígete a Configuración > Seguridad > Actualizar Contraseña."
+  }'
+```
+</CodeGroup>
+
+<Note>
+  This endpoint requires **Admin** or **RRHH** role permissions.
+</Note>
+
+### Path Parameters
+
+<ParamField path="id" type="integer" required>
+  FAQ ID to update
+</ParamField>
+
+### Request Body
+
+<ParamField body="id_categoria" type="integer" optional>
+  Updated category ID
+</ParamField>
+
+<ParamField body="pregunta" type="string" optional>
+  Updated question text
+</ParamField>
+
+<ParamField body="respuesta" type="string" optional>
+  Updated answer text
+</ParamField>
+
+### Response
+
+<CodeGroup>
+```json 200 OK
+{
+  "message": "FAQ actualizada exitosamente."
+}
+```
+
+```json 404 Not Found
+{
+  "message": "FAQ no encontrada o sin cambios para actualizar."
+}
+```
+
+```json 500 Error
+{
+  "message": "Error interno del servidor al actualizar FAQ."
+}
+```
+</CodeGroup>
+
+---
+
+## Delete FAQ
+
+<CodeGroup>
+```bash DELETE /api/faq/admin/:id
+curl -X DELETE "https://api.example.com/api/faq/admin/25" \
+  -H "Authorization: Bearer YOUR_TOKEN"
+```
+</CodeGroup>
+
+<Note>
+  This endpoint requires **Admin** or **RRHH** role permissions.
+</Note>
+
+### Path Parameters
+
+<ParamField path="id" type="integer" required>
+  FAQ ID to delete
+</ParamField>
+
+### Response
+
+<CodeGroup>
+```json 200 OK
+{
+  "message": "FAQ eliminada exitosamente."
+}
+```
+
+```json 404 Not Found
+{
+  "message": "FAQ no encontrada."
+}
+```
+
+```json 500 Error
+{
+  "message": "Error interno del servidor al eliminar FAQ."
+}
+```
+</CodeGroup>
+
+---
+
+## Implementation Reference
+
+Source files:
+- Routes: `src/routes/faqRoutes.js:13-17`
+- Controller: `src/controllers/faqController.js:42-243`

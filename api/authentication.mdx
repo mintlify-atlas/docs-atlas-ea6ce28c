@@ -1,0 +1,385 @@
+---
+title: 'Authentication'
+description: 'Learn how to authenticate with the Portal Self-Service Backend API using Azure AD JWT tokens'
+---
+
+## Overview
+
+The Portal Self-Service Backend API uses **JWT (JSON Web Token) authentication** with **Azure Active Directory (Azure AD)** to secure all API endpoints. Every request to protected endpoints must include a valid JWT token issued by Azure AD.
+
+<CardGroup cols={2}>
+  <Card title="Token-Based" icon="key">
+    Uses industry-standard JWT tokens for stateless authentication
+  </Card>
+  <Card title="Azure AD Integration" icon="microsoft">
+    Leverages Microsoft Azure AD for identity management
+  </Card>
+  <Card title="User Identity" icon="user">
+    Extracts user information from token claims (oid, upn, name)
+  </Card>
+  <Card title="Database Validation" icon="database">
+    Validates users exist in the internal employee database
+  </Card>
+</CardGroup>
+
+## Authentication Flow
+
+The API implements a two-stage authentication and authorization process:
+
+1. **JWT Validation** - Validates the token signature, expiration, issuer, and audience
+2. **User Loading** - Verifies the user exists in the internal employee database
+
+```mermaid
+sequenceDiagram
+    participant Client
+    participant Azure AD
+    participant API
+    participant Database
+    
+    Client->>Azure AD: Request access token
+    Azure AD->>Client: Return JWT token
+    Client->>API: Request with Authorization header
+    API->>API: Validate JWT signature & claims
+    API->>Database: Lookup user by azure_oid
+    Database->>API: Return employee data
+    API->>Client: Success response with data
+```
+
+## Obtaining an Access Token
+
+Before making API requests, you must obtain a JWT access token from Azure AD.
+
+### Azure AD Configuration
+
+<ParamField path="AZURE_ISSUER_BASE_URL" type="string" required>
+  The base URL for the Azure AD tenant issuing tokens
+  
+  **Format**: `https://login.microsoftonline.com/{tenant-id}/v2.0`
+</ParamField>
+
+<ParamField path="AZURE_AUDIENCE" type="string" required>
+  The Application ID URI of the backend API registered in Azure AD
+  
+  **Example**: `api://your-backend-api-client-id`
+</ParamField>
+
+### Token Request Example
+
+To obtain a token, make a request to Azure AD's token endpoint:
+
+```bash
+curl -X POST https://login.microsoftonline.com/{tenant-id}/oauth2/v2.0/token \
+  -H "Content-Type: application/x-www-form-urlencoded" \
+  -d "client_id={your-client-id}" \
+  -d "scope=api://{backend-api-client-id}/.default" \
+  -d "client_secret={your-client-secret}" \
+  -d "grant_type=client_credentials"
+```
+
+**Response:**
+
+```json
+{
+  "token_type": "Bearer",
+  "expires_in": 3599,
+  "access_token": "eyJ0eXAiOiJKV1QiLCJhbGciOiJSUzI1NiIsIng1dCI6..."
+}
+```
+
+## Making Authenticated Requests
+
+Include the access token in the `Authorization` header of every API request using the **Bearer** scheme.
+
+### Authorization Header Format
+
+```
+Authorization: Bearer {access_token}
+```
+
+### Example Request
+
+```bash
+curl -X GET https://api.example.com/api/empleados/me \
+  -H "Authorization: Bearer eyJ0eXAiOiJKV1QiLCJhbGciOiJSUzI1NiIsIng1dCI6..."
+```
+
+## Token Validation Process
+
+The API validates tokens using the `express-oauth2-jwt-bearer` library. The validation process checks:
+
+<CardGroup cols={2}>
+  <Card title="Signature Verification" icon="signature">
+    Verifies the token was signed by Azure AD using JWKS
+  </Card>
+  <Card title="Issuer Check" icon="shield-check">
+    Ensures the token was issued by the configured Azure AD tenant
+  </Card>
+  <Card title="Audience Validation" icon="bullseye">
+    Confirms the token was issued for this specific API
+  </Card>
+  <Card title="Expiration Check" icon="clock">
+    Validates the token has not expired
+  </Card>
+</CardGroup>
+
+### Token Claims Extracted
+
+The API extracts the following claims from validated JWT tokens:
+
+<ParamField path="oid" type="string" required>
+  **Object ID** - The unique identifier for the user in Azure AD
+  
+  Used to look up the employee in the internal database via the `azure_oid` field
+</ParamField>
+
+<ParamField path="upn" type="string">
+  **User Principal Name** - The user's email address (primary identifier)
+  
+  Falls back to `preferred_username` if `upn` is not present
+</ParamField>
+
+<ParamField path="preferred_username" type="string">
+  **Preferred Username** - Alternative email/username claim
+  
+  Used when `upn` is not available in the token
+</ParamField>
+
+<ParamField path="name" type="string">
+  **Display Name** - The user's full name
+</ParamField>
+
+### User Identity Object
+
+After successful JWT validation, the API creates a `userIdentity` object attached to the request:
+
+```javascript
+req.userIdentity = {
+  email: "user@example.com",  // From upn or preferred_username
+  azureId: "a1b2c3d4-..."      // From oid claim
+}
+```
+
+## User Database Validation
+
+After JWT validation, the `cargarUsuario` middleware performs database validation:
+
+1. Extracts the `azureId` from `req.userIdentity`
+2. Queries the database for an employee with matching `azure_oid`
+3. Includes related data (role, vacation records)
+4. Attaches the employee object to `req.empleado`
+
+### Database Query
+
+```javascript
+const empleado = await db.Empleado.findOne({
+  where: { azure_oid: azureId },
+  include: [
+    { model: db.Rol_empleado, as: 'rol' },
+    { model: db.Vacaciones, as: 'vacaciones' }
+  ],
+  attributes: ['id_empleado', 'correo', 'nombre']
+});
+```
+
+### Employee Object
+
+After successful database validation, the employee object is available to controllers:
+
+```javascript
+req.empleado = {
+  id_empleado: 123,
+  correo: "user@example.com",
+  nombre: "John Doe",
+  rol: { /* role data */ },
+  vacaciones: [ /* vacation records */ ]
+}
+```
+
+## Error Responses
+
+The authentication system returns specific error codes and messages for different failure scenarios.
+
+### 401 Unauthorized - Invalid or Missing Token
+
+Returned when the JWT token is invalid, expired, or missing from the request.
+
+<ResponseField name="message" type="string">
+  Human-readable error message
+</ResponseField>
+
+<ResponseField name="code" type="string">
+  Machine-readable error code: `invalid_auth_token`
+</ResponseField>
+
+**Example Response:**
+
+```json
+{
+  "message": "Acceso Denegado. Token inválido, expirado o faltante.",
+  "code": "invalid_auth_token"
+}
+```
+
+**Example Request:**
+
+```bash
+curl -X GET https://api.example.com/api/empleados/me \
+  -H "Authorization: Bearer invalid_or_expired_token"
+```
+
+**Response:**
+
+```bash
+HTTP/1.1 401 Unauthorized
+Content-Type: application/json
+
+{
+  "message": "Acceso Denegado. Token inválido, expirado o faltante.",
+  "code": "invalid_auth_token"
+}
+```
+
+### 401 Unauthorized - Missing Azure ID
+
+Returned when the token is valid but missing the required `oid` claim.
+
+**Example Response:**
+
+```json
+{
+  "message": "Autenticación requerida."
+}
+```
+
+### 403 Forbidden - User Not Found
+
+Returned when the user's Azure AD identity (`oid`) is not found in the employee database.
+
+**Example Response:**
+
+```json
+{
+  "message": "Usuario no encontrado en el sistema."
+}
+```
+
+**Example Request:**
+
+```bash
+curl -X GET https://api.example.com/api/empleados/me \
+  -H "Authorization: Bearer {valid-token-for-unknown-user}"
+```
+
+**Response:**
+
+```bash
+HTTP/1.1 403 Forbidden
+Content-Type: application/json
+
+{
+  "message": "Usuario no encontrado en el sistema."
+}
+```
+
+### 500 Internal Server Error - Database Error
+
+Returned when there's an error querying the employee database.
+
+**Example Response:**
+
+```json
+{
+  "message": "Error interno del servidor."
+}
+```
+
+## Error Code Reference
+
+<CardGroup cols={2}>
+  <Card title="401 - Invalid Token" icon="xmark">
+    Token is invalid, expired, or missing
+  </Card>
+  <Card title="401 - Missing Azure ID" icon="id-badge">
+    Token lacks required `oid` claim
+  </Card>
+  <Card title="403 - User Not Found" icon="user-slash">
+    User's Azure AD identity not in database
+  </Card>
+  <Card title="500 - Database Error" icon="database">
+    Internal error querying employee data
+  </Card>
+</CardGroup>
+
+## Complete Example
+
+Here's a complete example of authenticating and making an API request:
+
+### Step 1: Obtain Access Token
+
+```bash
+curl -X POST https://login.microsoftonline.com/your-tenant-id/oauth2/v2.0/token \
+  -H "Content-Type: application/x-www-form-urlencoded" \
+  -d "client_id=your-client-id" \
+  -d "scope=api://your-backend-api-client-id/.default" \
+  -d "client_secret=your-client-secret" \
+  -d "grant_type=client_credentials"
+```
+
+### Step 2: Make Authenticated Request
+
+```bash
+curl -X GET https://api.example.com/api/empleados/me \
+  -H "Authorization: Bearer eyJ0eXAiOiJKV1QiLCJhbGciOiJSUzI1NiIsIng1dCI6..." \
+  -H "Content-Type: application/json"
+```
+
+### Step 3: Receive Response
+
+```json
+{
+  "id_empleado": 123,
+  "correo": "user@example.com",
+  "nombre": "John Doe",
+  "rol": {
+    "id_rol": 2,
+    "nombre": "Usuario"
+  }
+}
+```
+
+## Security Best Practices
+
+<CardGroup cols={2}>
+  <Card title="Secure Token Storage" icon="lock">
+    Never store tokens in local storage or cookies accessible to JavaScript
+  </Card>
+  <Card title="HTTPS Only" icon="shield-halved">
+    Always use HTTPS to prevent token interception
+  </Card>
+  <Card title="Token Expiration" icon="hourglass">
+    Implement token refresh logic before expiration
+  </Card>
+  <Card title="Minimal Scopes" icon="filter">
+    Request only the minimum required scopes
+  </Card>
+</CardGroup>
+
+## Implementation Reference
+
+The authentication middleware is implemented in two files:
+
+- **JWT Validation**: `src/middleware/authMiddleware.js` - Validates Azure AD tokens
+- **User Loading**: `src/middleware/cargarUsuario.js` - Loads employee data from database
+
+Both middlewares must be applied to protected routes in sequence:
+
+```javascript
+import { authenticateAndExtract } from './middleware/authMiddleware.js';
+import { cargarUsuario } from './middleware/cargarUsuario.js';
+
+app.get('/api/protected-route', 
+  authenticateAndExtract,  // First: Validate JWT
+  cargarUsuario,           // Second: Load user from DB
+  controllerFunction       // Finally: Handle request
+);
+```

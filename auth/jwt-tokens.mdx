@@ -1,0 +1,355 @@
+---
+title: 'JWT Tokens'
+description: 'Understanding JWT token structure, claims, and verification in the Portal Self-Service Backend API'
+---
+
+## Overview
+
+The API uses JWT (JSON Web Tokens) issued by Azure Active Directory to authenticate requests. Each token contains claims about the user's identity and permissions.
+
+## Authorization Header Format
+
+All authenticated requests must include a Bearer token in the Authorization header:
+
+```http
+Authorization: Bearer eyJ0eXAiOiJKV1QiLCJhbGciOiJSUzI1NiIsIng1dCI6...
+```
+
+<Info>
+  The token must be sent with every request to protected endpoints.
+</Info>
+
+## Token Structure
+
+A JWT consists of three parts separated by dots:
+
+```
+header.payload.signature
+```
+
+### Header
+
+Contains metadata about the token:
+
+```json
+{
+  "typ": "JWT",
+  "alg": "RS256",
+  "kid": "..."
+}
+```
+
+### Payload (Claims)
+
+Contains user identity and token metadata:
+
+```json
+{
+  "aud": "api://12345678-1234-1234-1234-123456789abc",
+  "iss": "https://login.microsoftonline.com/<tenant-id>/v2.0",
+  "iat": 1234567890,
+  "exp": 1234571490,
+  "oid": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+  "upn": "usuario@empresa.com",
+  "preferred_username": "usuario@empresa.com",
+  "name": "Juan Pérez"
+}
+```
+
+### Signature
+
+Cryptographic signature that validates the token hasn't been tampered with.
+
+## Important Token Claims
+
+The API uses the following claims from Azure AD tokens:
+
+<CardGroup cols={2}>
+  <Card title="oid" icon="fingerprint">
+    **Object ID** - Unique identifier for the user in Azure AD. Used as the primary user identifier.
+  </Card>
+  
+  <Card title="upn" icon="envelope">
+    **User Principal Name** - The user's email address. Primary source for user email.
+  </Card>
+  
+  <Card title="preferred_username" icon="at">
+    **Preferred Username** - Alternative email claim, used as fallback if `upn` is not present.
+  </Card>
+  
+  <Card title="name" icon="user">
+    **Display Name** - The user's full name as configured in Azure AD.
+  </Card>
+  
+  <Card title="aud" icon="bullseye">
+    **Audience** - The intended recipient of the token (must match `AZURE_AUDIENCE`).
+  </Card>
+  
+  <Card title="iss" icon="building">
+    **Issuer** - The authority that issued the token (Azure AD).
+  </Card>
+  
+  <Card title="exp" icon="clock">
+    **Expiration** - Timestamp when the token expires (Unix timestamp).
+  </Card>
+  
+  <Card title="iat" icon="calendar">
+    **Issued At** - Timestamp when the token was issued (Unix timestamp).
+  </Card>
+</CardGroup>
+
+## Token Verification with express-oauth2-jwt-bearer
+
+The API uses the `express-oauth2-jwt-bearer` library (v1.7.1) to verify tokens.
+
+### Installation
+
+```bash
+npm install express-oauth2-jwt-bearer
+```
+
+### Configuration
+
+From `src/middleware/authMiddleware.js:13-19`:
+
+```javascript src/middleware/authMiddleware.js
+const checkJwtBase = auth({
+    // El 'issuer' (emisor) que firmó el token debe ser Microsoft.
+    issuerBaseURL: process.env.AZURE_ISSUER_BASE_URL, 
+    
+    // La 'audience' (audiencia) para la que fue emitido el token debe ser tu API.
+    audience: process.env.AZURE_AUDIENCE,
+});
+```
+
+<Note>
+  The `auth()` function creates a middleware that automatically:
+  - Downloads Azure AD's public keys (JWKS)
+  - Verifies the token signature
+  - Validates issuer and audience
+  - Checks token expiration
+</Note>
+
+## The authenticateAndExtract Middleware
+
+This middleware combines JWT verification with user identity extraction.
+
+### Full Implementation
+
+From `src/middleware/authMiddleware.js:22-56`:
+
+```javascript src/middleware/authMiddleware.js
+export const authenticateAndExtract = (req, res, next) => {
+    // Primero, se ejecuta el middleware de verificación de JWT.
+    checkJwtBase(req, res, async (err) => {
+        // Si hay un error de JWT (token expirado, inválido, etc.), lo manejamos y salimos.
+        if (err) {
+            console.error("Error de autenticación JWT:", err.message);
+            //Si el error es por token inválido o expirado, responder con 401
+            if (err.name === 'InvalidTokenError' || err.code === 'credentials_required') {
+                return res.status(401).json({ 
+                    message: "Acceso Denegado. Token inválido, expirado o faltante.",
+                    code: "invalid_auth_token"
+                });
+            }
+            //Para otros errores, pasa al 500
+            return next(err);
+        }
+
+        // Si checkJwt fue exitoso, el payload del token está en req.auth.payload
+        if (req.auth && req.auth.payload) {
+            const userEmail = req.auth.payload.upn || req.auth.payload.preferred_username;
+            const name = req.auth.payload.name;
+            
+            console.log(`Autenticación Exitosa: ${userEmail}`);
+            
+            // Se adjunta la identidad al objeto que el controlador espera.
+            req.userIdentity = {
+                email: userEmail,
+                azureId: req.auth.payload.oid // El ID de Objeto único de Azure
+            };
+        }
+        
+        console.log("-> Solicitud entrante a ruta protegida.");
+        next(); 
+    });
+};
+```
+
+### What It Does
+
+<Steps>
+  <Step title="Verify JWT">
+    Calls `checkJwtBase` to validate the token signature, issuer, audience, and expiration.
+  </Step>
+
+  <Step title="Handle Errors">
+    If verification fails:
+    - Returns `401` for invalid/expired/missing tokens
+    - Returns `500` for other errors
+  </Step>
+
+  <Step title="Extract User Identity">
+    On successful verification:
+    - Extracts email from `upn` or `preferred_username` claim
+    - Extracts Azure Object ID from `oid` claim
+    - Attaches identity to `req.userIdentity`
+  </Step>
+
+  <Step title="Continue to Next Middleware">
+    Calls `next()` to proceed to the next middleware or route handler.
+  </Step>
+</Steps>
+
+### Request Object After Authentication
+
+After successful authentication, the request object contains:
+
+```javascript
+req.auth = {
+  payload: {
+    oid: "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+    upn: "usuario@empresa.com",
+    preferred_username: "usuario@empresa.com",
+    name: "Juan Pérez",
+    // ... other claims
+  }
+}
+
+req.userIdentity = {
+  email: "usuario@empresa.com",
+  azureId: "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
+}
+```
+
+## Usage in Routes
+
+Apply the middleware to protect routes:
+
+### Example: Employee Routes
+
+From `src/routes/empleadoRoutes.js:10-13`:
+
+```javascript src/routes/empleadoRoutes.js
+const router = express.Router();
+router.use(authenticateAndExtract)
+router.use(cargarUsuario);
+
+router.get('/profile', empleadoController.getEmpleado);
+```
+
+<Info>
+  All routes in this router automatically require a valid JWT token.
+</Info>
+
+## Error Responses
+
+### 401 - Unauthorized
+
+Returned when token validation fails:
+
+```json
+{
+  "message": "Acceso Denegado. Token inválido, expirado o faltante.",
+  "code": "invalid_auth_token"
+}
+```
+
+**Common causes:**
+- Token is expired
+- Token signature is invalid
+- Missing Authorization header
+- Invalid token format
+- Token audience doesn't match API configuration
+
+### 500 - Internal Server Error
+
+Returned for unexpected errors during token verification:
+
+```json
+{
+  "message": "Internal server error"
+}
+```
+
+## Testing Authentication
+
+### Using cURL
+
+```bash
+curl -X GET https://api.example.com/api/empleados/profile \
+  -H "Authorization: Bearer YOUR_JWT_TOKEN"
+```
+
+### Using Postman
+
+<Steps>
+  <Step title="Set Authorization Type">
+    Select **Bearer Token** from the Authorization type dropdown.
+  </Step>
+
+  <Step title="Paste Your Token">
+    Paste your Azure AD JWT token in the Token field.
+  </Step>
+
+  <Step title="Send Request">
+    Send the request to any protected endpoint.
+  </Step>
+</Steps>
+
+### Using JavaScript (Fetch)
+
+```javascript
+const response = await fetch('https://api.example.com/api/empleados/profile', {
+  headers: {
+    'Authorization': `Bearer ${accessToken}`,
+    'Content-Type': 'application/json'
+  }
+});
+
+const data = await response.json();
+```
+
+## Token Expiration
+
+Azure AD tokens typically expire after 1 hour. Client applications must:
+
+1. **Detect expiration**: Handle 401 responses
+2. **Refresh token**: Use refresh tokens to obtain new access tokens
+3. **Retry request**: Retry the original request with the new token
+
+<Warning>
+  Never store tokens in client-side code or version control. Use secure storage mechanisms like HttpOnly cookies or secure storage APIs.
+</Warning>
+
+## Best Practices
+
+<CardGroup cols={2}>
+  <Card title="Always Use HTTPS" icon="lock">
+    Tokens must only be transmitted over encrypted connections to prevent interception.
+  </Card>
+  
+  <Card title="Validate on Every Request" icon="shield-check">
+    Never skip token validation, even for seemingly "internal" requests.
+  </Card>
+  
+  <Card title="Handle Expiration Gracefully" icon="rotate">
+    Implement automatic token refresh in client applications.
+  </Card>
+  
+  <Card title="Log Authentication Failures" icon="clipboard-list">
+    Monitor failed authentication attempts for security analysis.
+  </Card>
+</CardGroup>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Azure AD Setup" icon="microsoft" href="/auth/azure-ad-setup">
+    Configure Azure Active Directory for your API
+  </Card>
+  
+  <Card title="Roles & Permissions" icon="user-shield" href="/auth/roles-permissions">
+    Implement role-based access control
+  </Card>
+</CardGroup>

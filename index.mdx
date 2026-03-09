@@ -1,97 +1,108 @@
 ---
-title: "Introduction"
-description: "Welcome to the new home for your documentation"
+title: "Portal Self-Service Backend API"
+description: "Enterprise employee self-service portal backend with Azure AD authentication, request management, and real-time notifications"
 ---
 
-## Setting up
+## Welcome
 
-Get your documentation site up and running in minutes.
+The Portal Self-Service Backend API is a comprehensive REST API built with Express.js that powers employee self-service portals. It provides secure authentication via Microsoft Entra ID (Azure AD), a sophisticated request approval workflow, and real-time notifications through WebSockets.
+
+<CardGroup cols={2}>
+  <Card
+    title="Quickstart"
+    icon="rocket"
+    href="/quickstart"
+  >
+    Get up and running with the API in minutes
+  </Card>
+  <Card
+    title="Architecture"
+    icon="sitemap"
+    href="/architecture"
+  >
+    Understand the system design and components
+  </Card>
+  <Card
+    title="API Reference"
+    icon="code"
+    href="/api/authentication"
+  >
+    Explore all available endpoints
+  </Card>
+  <Card
+    title="Azure AD Setup"
+    icon="shield"
+    href="/auth/azure-ad-setup"
+  >
+    Configure Microsoft Entra ID authentication
+  </Card>
+</CardGroup>
+
+## Key Features
+
+<CardGroup cols={3}>
+  <Card
+    title="Azure AD Authentication"
+    icon="lock"
+  >
+    Secure JWT-based authentication with Microsoft Entra ID (Azure AD)
+  </Card>
+  <Card
+    title="Request Workflow"
+    icon="list-check"
+  >
+    Approval system for vacations, profile updates, and custom requests
+  </Card>
+  <Card
+    title="Real-time Notifications"
+    icon="bell"
+  >
+    Socket.io WebSocket integration for instant updates
+  </Card>
+  <Card
+    title="Role-Based Access"
+    icon="users"
+  >
+    Three-tier permission system: Employee, Admin, Super Admin
+  </Card>
+  <Card
+    title="File Management"
+    icon="file"
+  >
+    Upload and manage documents with Multer
+  </Card>
+  <Card
+    title="Admin Dashboard"
+    icon="chart-line"
+  >
+    Vacation statistics and workforce analytics
+  </Card>
+</CardGroup>
+
+## Core Capabilities
+
+### Employee Management
+Manage employee profiles, search the directory, and handle profile update requests with proper authorization controls.
+
+### Request System
+Create, approve, and track employee requests including vacation time, profile changes, and custom request types with a complete audit trail.
+
+### Communication
+Broadcast announcements to employees, manage FAQ content, and send real-time notifications through WebSockets.
+
+### Integrations
+- **Database**: MSSQL with Sequelize ORM
+- **Authentication**: Microsoft Entra ID (Azure AD) with JWT
+- **Real-time**: Socket.io for WebSocket connections
+- **Documentation**: OpenAPI/Swagger integration
+
+## Get Started
 
 <Card
-  title="Start here"
-  icon="rocket"
+  title="Follow the Quickstart Guide"
+  icon="play"
   href="/quickstart"
   horizontal
 >
-  Follow our three step quickstart guide.
-</Card>
-
-## Make it yours
-
-Design a docs site that looks great and empowers your users.
-
-<Columns cols={2}>
-  <Card
-    title="Edit locally"
-    icon="pen-to-square"
-    href="/development"
-  >
-    Edit your docs locally and preview them in real time.
-  </Card>
-  <Card
-    title="Customize your site"
-    icon="palette"
-    href="/essentials/settings"
-  >
-    Customize the design and colors of your site to match your brand.
-  </Card>
-    <Card
-    title="Set up navigation"
-    icon="map"
-    href="/essentials/navigation"
-  >
-    Organize your docs to help users find what they need and succeed with your product.
-  </Card>
-  <Card
-    title="API documentation"
-    icon="terminal"
-    href="/api-reference/introduction"
-  >
-    Auto-generate API documentation from OpenAPI specifications.
-  </Card>
-</Columns>
-
-## Create beautiful pages
-
-Everything you need to create world-class documentation.
-
-<Columns cols={2}>
-  <Card
-    title="Write with MDX"
-    icon="pen-fancy"
-    href="/essentials/markdown"
-  >
-    Use MDX to style your docs pages.
-  </Card>
-  <Card
-    title="Code samples"
-    icon="code"
-    href="/essentials/code"
-  >
-    Add sample code to demonstrate how to use your product.
-  </Card>
-  <Card
-    title="Images"
-    icon="image"
-    href="/essentials/images"
-  >
-    Display images and other media.
-  </Card>
-  <Card
-    title="Reusable snippets"
-    icon="recycle"
-    href="/essentials/reusable-snippets"
-  >
-    Write once and reuse across your docs.
-  </Card>
-</Columns>
-
-## Need inspiration?
-
-<Card
-  title="See complete examples"
-  icon="stars"
-  href="https://mintlify.com/customers"
->
-  Browse our showcase of exceptional documentation sites.
+  Set up your environment, configure Azure AD, and make your first API call in under 10 minutes
 </Card>

@@ -1,0 +1,389 @@
+---
+title: 'Approve and Reject Requests'
+description: 'Admin endpoints to approve or reject employee requests'
+icon: 'gavel'
+---
+
+Administrators can approve or reject pending employee requests. The approval process varies depending on the request type.
+
+## Approve Request
+
+```
+PUT /api/solicitudes/:id/aprobar
+```
+
+### Authentication
+
+<Card title="Admin Access Required" icon="user-shield">
+  This endpoint requires Admin or Super Admin role. Regular employees cannot approve requests.
+</Card>
+
+### Path Parameters
+
+<ParamField path="id" type="number" required>
+  The unique identifier of the request to approve
+</ParamField>
+
+### Request Body
+
+<ParamField body="retroalimentacion" type="string">
+  Optional feedback message for the employee
+  
+  Example: `"Approved. Enjoy your vacation!"`
+</ParamField>
+
+### Response
+
+<ResponseField name="message" type="string">
+  Success message indicating the request type that was approved
+</ResponseField>
+
+<ResponseField name="solicitud_actualizada" type="object">
+  The updated request object with approval details
+</ResponseField>
+
+### Code Example
+
+<CodeGroup>
+```javascript JavaScript
+const token = 'admin_jwt_token';
+const requestId = 123;
+
+const response = await fetch(`/api/solicitudes/${requestId}/aprobar`, {
+  method: 'PUT',
+  headers: {
+    'Authorization': `Bearer ${token}`,
+    'Content-Type': 'application/json'
+  },
+  body: JSON.stringify({
+    retroalimentacion: 'Approved. Have a great time!'
+  })
+});
+
+const data = await response.json();
+console.log(data);
+```
+
+```python Python
+import requests
+import json
+
+token = 'admin_jwt_token'
+request_id = 123
+
+headers = {
+    'Authorization': f'Bearer {token}',
+    'Content-Type': 'application/json'
+}
+
+data = {
+    'retroalimentacion': 'Approved. Have a great time!'
+}
+
+response = requests.put(
+    f'/api/solicitudes/{request_id}/aprobar',
+    headers=headers,
+    data=json.dumps(data)
+)
+result = response.json()
+print(result)
+```
+
+```bash cURL
+curl -X PUT "/api/solicitudes/123/aprobar" \
+  -H "Authorization: Bearer admin_jwt_token" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "retroalimentacion": "Approved. Have a great time!"
+  }'
+```
+</CodeGroup>
+
+### Success Response
+
+```json 200 OK
+{
+  "message": "Solicitud de 1 aprobada exitosamente.",
+  "solicitud_actualizada": {
+    "id_solicitud": 123,
+    "id_estado_solicitud": 2,
+    "id_aprobador": 5,
+    "retroalimentacion": "Approved. Have a great time!"
+  }
+}
+```
+
+### Error Responses
+
+<ResponseExample>
+```json 404 Not Found
+{
+  "message": "Solicitud con ID 999 no encontrada"
+}
+```
+
+```json 400 Bad Request - Already Processed
+{
+  "message": "La solicitud ya ha sido procesada"
+}
+```
+
+```json 400 Bad Request - Insufficient Vacation Days
+{
+  "message": "Días insuficientes. El empleado solicita 10 y dispone de 5.",
+  "dias_solicitados": 10,
+  "dias_disponibles": 5
+}
+```
+
+```json 400 Bad Request - Invalid Date Range
+{
+  "message": "Error en el rango de fechas: La fecha de fin debe ser posterior a la fecha de inicio."
+}
+```
+
+```json 500 Internal Server Error
+{
+  "message": "Error interno del servidor"
+}
+```
+</ResponseExample>
+
+## Reject Request
+
+```
+PUT /api/solicitudes/:id/rechazar
+```
+
+### Authentication
+
+<Card title="Admin Access Required" icon="user-shield">
+  This endpoint requires Admin or Super Admin role. Regular employees cannot reject requests.
+</Card>
+
+### Path Parameters
+
+<ParamField path="id" type="number" required>
+  The unique identifier of the request to reject
+</ParamField>
+
+### Request Body
+
+<ParamField body="retroalimentacion" type="string">
+  Optional feedback explaining why the request was rejected
+  
+  Example: `"Insufficient staffing during this period"`
+</ParamField>
+
+### Response
+
+<ResponseField name="message" type="string">
+  Success message: "Solicitud rechazada exitosamente"
+</ResponseField>
+
+<ResponseField name="solicitud_actualizada" type="object">
+  The updated request object with rejection details
+</ResponseField>
+
+### Code Example
+
+<CodeGroup>
+```javascript JavaScript
+const token = 'admin_jwt_token';
+const requestId = 123;
+
+const response = await fetch(`/api/solicitudes/${requestId}/rechazar`, {
+  method: 'PUT',
+  headers: {
+    'Authorization': `Bearer ${token}`,
+    'Content-Type': 'application/json'
+  },
+  body: JSON.stringify({
+    retroalimentacion: 'Cannot approve due to staffing requirements'
+  })
+});
+
+const data = await response.json();
+console.log(data);
+```
+
+```python Python
+import requests
+import json
+
+token = 'admin_jwt_token'
+request_id = 123
+
+headers = {
+    'Authorization': f'Bearer {token}',
+    'Content-Type': 'application/json'
+}
+
+data = {
+    'retroalimentacion': 'Cannot approve due to staffing requirements'
+}
+
+response = requests.put(
+    f'/api/solicitudes/{request_id}/rechazar',
+    headers=headers,
+    data=json.dumps(data)
+)
+result = response.json()
+print(result)
+```
+
+```bash cURL
+curl -X PUT "/api/solicitudes/123/rechazar" \
+  -H "Authorization: Bearer admin_jwt_token" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "retroalimentacion": "Cannot approve due to staffing requirements"
+  }'
+```
+</CodeGroup>
+
+### Success Response
+
+```json 200 OK
+{
+  "message": "Solicitud rechazada exitosamente",
+  "solicitud_actualizada": {
+    "id_solicitud": 123,
+    "id_estado_solicitud": 3,
+    "id_aprobador": 5,
+    "retroalimentacion": "Cannot approve due to staffing requirements"
+  }
+}
+```
+
+### Error Responses
+
+<ResponseExample>
+```json 404 Not Found
+{
+  "message": "Solicitud con ID 999 no encontrada"
+}
+```
+
+```json 400 Bad Request - Already Processed
+{
+  "message": "La solicitud ya ha sido procesada"
+}
+```
+
+```json 500 Internal Server Error
+{
+  "message": "Error interno del servidor"
+}
+```
+</ResponseExample>
+
+## Cancel Request (Employee)
+
+```
+PUT /api/solicitudes/:id/cancelar
+```
+
+Employees can cancel their own pending requests.
+
+### Authentication
+
+<Card title="Owner Only" icon="user">
+  Employees can only cancel their own requests. Admins cannot use this endpoint to cancel others' requests.
+</Card>
+
+### Path Parameters
+
+<ParamField path="id" type="number" required>
+  The unique identifier of the request to cancel
+</ParamField>
+
+### Code Example
+
+```javascript
+const token = 'employee_jwt_token';
+const requestId = 123;
+
+const response = await fetch(`/api/solicitudes/${requestId}/cancelar`, {
+  method: 'PUT',
+  headers: {
+    'Authorization': `Bearer ${token}`,
+    'Content-Type': 'application/json'
+  }
+});
+
+const data = await response.json();
+```
+
+### Success Response
+
+```json 200 OK
+{
+  "message": "Solicitud cancelada exitosamente",
+  "solicitud_actualizada": {
+    "id_solicitud": 123,
+    "id_estado_solicitud": 4
+  }
+}
+```
+
+### Error Responses
+
+<ResponseExample>
+```json 404 Not Found
+{
+  "message": "Solicitud no encontrada"
+}
+```
+
+```json 403 Forbidden
+{
+  "message": "Solo puedes cancelar tus propias solicitudes"
+}
+```
+
+```json 400 Bad Request - Already Processed
+{
+  "message": "La solicitud ya fue procesada, no se puede cancelar"
+}
+```
+</ResponseExample>
+
+## Approval Business Logic by Type
+
+<CardGroup cols={2}>
+  <Card title="Vacation (Type 1)" icon="umbrella-beach">
+    - Validates employee has sufficient vacation days
+    - Checks date range validity
+    - Deducts days from employee balance
+    - Updates vacation record
+  </Card>
+  <Card title="Profile Update (Type 5)" icon="user-pen">
+    - Applies proposed changes to employee record
+    - Updates phone, address, or profile image
+    - No balance calculations needed
+  </Card>
+  <Card title="Absence (Type 3)" icon="calendar-xmark">
+    - Simple approval without balance changes
+    - Validates date range
+    - Records approval
+  </Card>
+  <Card title="Other Types (2, 4)" icon="clock">
+    - Simple approval process
+    - Date validation if applicable
+    - No special business logic
+  </Card>
+</CardGroup>
+
+## Notifications
+
+When a request is approved or rejected, the system automatically sends a notification to the employee:
+
+**Approval Notification:**
+- Type: `SOLICITUD_APROBADA`
+- Message includes approval confirmation
+
+**Rejection Notification:**
+- Type: `SOLICITUD_RECHAZADA`  
+- Message: "Tu solicitud ha sido rechazada"
+- Includes feedback if provided

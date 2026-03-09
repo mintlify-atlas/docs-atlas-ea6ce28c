@@ -1,0 +1,319 @@
+---
+title: 'Admin Calendar View'
+api: 'GET /api/solicitudes/admin/calendario'
+description: 'Retrieve approved requests in calendar event format for administrators'
+---
+
+## Endpoint
+
+```
+GET /api/solicitudes/admin/calendario
+```
+
+This endpoint returns approved requests formatted as calendar events, designed for integration with calendar components like FullCalendar.
+
+## Authentication
+
+<Card title="Admin Access Required" icon="user-shield">
+  This endpoint requires Admin or Super Admin role. Regular employees cannot access the calendar view.
+</Card>
+
+## Query Parameters
+
+<ParamField query="fecha_inicio" type="string" required>
+  Start date for the calendar range (YYYY-MM-DD)
+  
+  Example: `"2026-03-01"`
+</ParamField>
+
+<ParamField query="fecha_fin" type="string" required>
+  End date for the calendar range (YYYY-MM-DD)
+  
+  Example: `"2026-03-31"`
+</ParamField>
+
+<ParamField query="id_tipo_solicitud" type="number">
+  Optional filter by request type:
+  - `1`: Vacation
+  - `2`: Permission
+  - `3`: Absence
+  - `4`: Remote Work
+  
+  If omitted, returns all approved request types
+</ParamField>
+
+## Response
+
+<ResponseField name="status" type="number">
+  HTTP status code (200 for success)
+</ResponseField>
+
+<ResponseField name="results" type="number">
+  Number of events returned
+</ResponseField>
+
+<ResponseField name="data" type="object">
+  <Expandable title="properties">
+    <ResponseField name="eventos" type="array">
+      Array of calendar event objects compatible with FullCalendar
+      <Expandable title="Event Object">
+        <ResponseField name="id" type="number">
+          Request ID
+        </ResponseField>
+        <ResponseField name="title" type="string">
+          Event title (employee name + request type)
+        </ResponseField>
+        <ResponseField name="start" type="string">
+          Event start date (ISO 8601 format)
+        </ResponseField>
+        <ResponseField name="end" type="string">
+          Event end date (ISO 8601 format)
+        </ResponseField>
+        <ResponseField name="allDay" type="boolean">
+          Whether the event is all-day (usually true)
+        </ResponseField>
+        <ResponseField name="backgroundColor" type="string">
+          Color code for the event type
+        </ResponseField>
+        <ResponseField name="borderColor" type="string">
+          Border color for the event
+        </ResponseField>
+        <ResponseField name="extendedProps" type="object">
+          Additional event metadata
+          <Expandable title="properties">
+            <ResponseField name="id_empleado" type="number">
+              Employee ID
+            </ResponseField>
+            <ResponseField name="id_tipo_solicitud" type="number">
+              Request type ID
+            </ResponseField>
+            <ResponseField name="descripcion" type="string">
+              Request description
+            </ResponseField>
+            <ResponseField name="dias_solicitados" type="number">
+              Number of days
+            </ResponseField>
+          </Expandable>
+        </ResponseField>
+      </Expandable>
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+## Code Examples
+
+<CodeGroup>
+```javascript JavaScript
+const token = 'admin_jwt_token';
+
+const params = new URLSearchParams({
+  fecha_inicio: '2026-03-01',
+  fecha_fin: '2026-03-31',
+  id_tipo_solicitud: 1 // Optional: filter for vacations only
+});
+
+const response = await fetch(`/api/solicitudes/admin/calendario?${params}`, {
+  method: 'GET',
+  headers: {
+    'Authorization': `Bearer ${token}`,
+    'Content-Type': 'application/json'
+  }
+});
+
+const data = await response.json();
+console.log(data);
+```
+
+```python Python
+import requests
+
+token = 'admin_jwt_token'
+headers = {
+    'Authorization': f'Bearer {token}',
+    'Content-Type': 'application/json'
+}
+
+params = {
+    'fecha_inicio': '2026-03-01',
+    'fecha_fin': '2026-03-31',
+    'id_tipo_solicitud': 1  # Optional
+}
+
+response = requests.get(
+    '/api/solicitudes/admin/calendario',
+    headers=headers,
+    params=params
+)
+data = response.json()
+print(data)
+```
+
+```bash cURL
+curl -X GET "/api/solicitudes/admin/calendario?fecha_inicio=2026-03-01&fecha_fin=2026-03-31&id_tipo_solicitud=1" \
+  -H "Authorization: Bearer admin_jwt_token" \
+  -H "Content-Type: application/json"
+```
+</CodeGroup>
+
+## Response Example
+
+```json 200 OK
+{
+  "status": 200,
+  "results": 3,
+  "data": {
+    "eventos": [
+      {
+        "id": 123,
+        "title": "John Doe - Vacaciones",
+        "start": "2026-03-10T00:00:00.000Z",
+        "end": "2026-03-15T00:00:00.000Z",
+        "allDay": true,
+        "backgroundColor": "#3788d8",
+        "borderColor": "#3788d8",
+        "extendedProps": {
+          "id_empleado": 45,
+          "id_tipo_solicitud": 1,
+          "descripcion": "Spring vacation",
+          "dias_solicitados": 5
+        }
+      },
+      {
+        "id": 124,
+        "title": "Jane Smith - Permiso",
+        "start": "2026-03-20T00:00:00.000Z",
+        "end": "2026-03-20T00:00:00.000Z",
+        "allDay": true,
+        "backgroundColor": "#f59e0b",
+        "borderColor": "#f59e0b",
+        "extendedProps": {
+          "id_empleado": 67,
+          "id_tipo_solicitud": 2,
+          "descripcion": "Medical appointment",
+          "dias_solicitados": 1
+        }
+      }
+    ]
+  }
+}
+```
+
+## Error Responses
+
+<ResponseExample>
+```json 400 Bad Request - Missing Dates
+{
+  "status": "fail",
+  "message": "Los parámetros fecha_inicio y fecha_fin son obligatorios (YYYY-MM-DD)."
+}
+```
+
+```json 500 Internal Server Error
+{
+  "status": "error",
+  "message": "Error al obtener los eventos del calendario."
+}
+```
+</ResponseExample>
+
+## FullCalendar Integration
+
+This endpoint is designed to work seamlessly with FullCalendar:
+
+```javascript
+import FullCalendar from '@fullcalendar/react';
+import dayGridPlugin from '@fullcalendar/daygrid';
+
+function AdminCalendar() {
+  const [events, setEvents] = useState([]);
+
+  const fetchEvents = async (fetchInfo) => {
+    const params = new URLSearchParams({
+      fecha_inicio: fetchInfo.startStr.split('T')[0],
+      fecha_fin: fetchInfo.endStr.split('T')[0]
+    });
+
+    const response = await fetch(
+      `/api/solicitudes/admin/calendario?${params}`,
+      {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      }
+    );
+
+    const data = await response.json();
+    setEvents(data.data.eventos);
+  };
+
+  return (
+    <FullCalendar
+      plugins={[dayGridPlugin]}
+      initialView="dayGridMonth"
+      events={events}
+      datesSet={fetchEvents}
+    />
+  );
+}
+```
+
+## Event Color Coding
+
+Events are color-coded by request type for easy visual identification:
+
+<CardGroup cols={2}>
+  <Card title="Vacation" icon="umbrella-beach">
+    **Color**: Blue (#3788d8)
+    
+    Represents approved vacation requests
+  </Card>
+  <Card title="Permission" icon="clock">
+    **Color**: Amber (#f59e0b)
+    
+    Represents approved permission requests
+  </Card>
+  <Card title="Absence" icon="calendar-xmark">
+    **Color**: Red (#ef4444)
+    
+    Represents approved absence requests
+  </Card>
+  <Card title="Remote Work" icon="laptop-house">
+    **Color**: Green (#10b981)
+    
+    Represents approved remote work requests
+  </Card>
+</CardGroup>
+
+## Use Cases
+
+<CardGroup cols={2}>
+  <Card title="Team Planning" icon="users">
+    View all employee absences and vacations to plan team capacity
+  </Card>
+  <Card title="Conflict Detection" icon="triangle-exclamation">
+    Identify potential scheduling conflicts before approving new requests
+  </Card>
+  <Card title="Vacation Tracking" icon="chart-line">
+    Monitor vacation patterns and ensure adequate coverage
+  </Card>
+  <Card title="Reporting" icon="file-chart-column">
+    Generate reports on employee time off patterns
+  </Card>
+</CardGroup>
+
+## Filtering Examples
+
+```javascript
+// Get all approved requests for March 2026
+GET /api/solicitudes/admin/calendario?fecha_inicio=2026-03-01&fecha_fin=2026-03-31
+
+// Get only vacation requests for Q2 2026
+GET /api/solicitudes/admin/calendario?fecha_inicio=2026-04-01&fecha_fin=2026-06-30&id_tipo_solicitud=1
+
+// Get all requests for the current week
+const today = new Date();
+const weekStart = new Date(today.setDate(today.getDate() - today.getDay()));
+const weekEnd = new Date(today.setDate(today.getDate() - today.getDay() + 6));
+
+GET /api/solicitudes/admin/calendario?fecha_inicio=${weekStart}&fecha_fin=${weekEnd}
+```

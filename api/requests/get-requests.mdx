@@ -1,0 +1,230 @@
+---
+title: 'Get Requests'
+api: 'GET /api/solicitudes'
+description: 'Retrieve requests with pagination, filtering, and role-based access control'
+---
+
+## Endpoint
+
+```
+GET /api/solicitudes
+```
+
+## Authentication
+
+Requires JWT authentication. The endpoint returns different data based on user role:
+
+<CardGroup cols={3}>
+  <Card title="Employee" icon="user">
+    Returns only their own requests
+  </Card>
+  <Card title="Admin" icon="user-shield">
+    Returns all requests except canceled ones
+  </Card>
+  <Card title="Super Admin" icon="user-crown">
+    Returns all requests including canceled
+  </Card>
+</CardGroup>
+
+## Query Parameters
+
+<ParamField query="page" type="number" default="1">
+  Page number for pagination
+</ParamField>
+
+<ParamField query="limit" type="number" default="25">
+  Number of items per page
+</ParamField>
+
+<ParamField query="id_estado" type="number">
+  Filter by request state:
+  - `1`: Pending
+  - `2`: Approved
+  - `3`: Rejected
+  - `4`: Canceled
+</ParamField>
+
+<ParamField query="id_tipo" type="number">
+  Filter by request type:
+  - `1`: Vacation
+  - `2`: Permission
+  - `3`: Absence
+  - `4`: Remote Work
+  - `5`: Profile Update
+</ParamField>
+
+<ParamField query="search" type="string">
+  Text search across request fields
+</ParamField>
+
+<ParamField query="start_date" type="string">
+  Filter requests starting from this date (YYYY-MM-DD)
+</ParamField>
+
+<ParamField query="end_date" type="string">
+  Filter requests up to this date (YYYY-MM-DD)
+</ParamField>
+
+## Response
+
+<ResponseField name="status" type="string">
+  Status of the response ("success")
+</ResponseField>
+
+<ResponseField name="data" type="object">
+  <Expandable title="properties">
+    <ResponseField name="solicitudes" type="array">
+      Array of request objects
+      <Expandable title="Request Object">
+        <ResponseField name="id_solicitud" type="number">
+          Unique request identifier
+        </ResponseField>
+        <ResponseField name="id_empleado" type="number">
+          Employee ID who created the request
+        </ResponseField>
+        <ResponseField name="id_tipo_solicitud" type="number">
+          Type of request (1-5)
+        </ResponseField>
+        <ResponseField name="id_estado_solicitud" type="number">
+          Current state (1-4)
+        </ResponseField>
+        <ResponseField name="fecha_inicio" type="string">
+          Start date (YYYY-MM-DD HH:mm:ss)
+        </ResponseField>
+        <ResponseField name="fecha_fin" type="string">
+          End date (YYYY-MM-DD HH:mm:ss)
+        </ResponseField>
+        <ResponseField name="dias_solicitados" type="number">
+          Number of days requested
+        </ResponseField>
+        <ResponseField name="descripcion_solicitud" type="string">
+          Request description
+        </ResponseField>
+        <ResponseField name="documento_url" type="string">
+          URL to supporting document (optional)
+        </ResponseField>
+      </Expandable>
+    </ResponseField>
+    <ResponseField name="pagination" type="object">
+      <Expandable title="properties">
+        <ResponseField name="total" type="number">
+          Total number of requests
+        </ResponseField>
+        <ResponseField name="page" type="number">
+          Current page number
+        </ResponseField>
+        <ResponseField name="limit" type="number">
+          Items per page
+        </ResponseField>
+        <ResponseField name="totalPages" type="number">
+          Total number of pages
+        </ResponseField>
+      </Expandable>
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+## Code Examples
+
+<CodeGroup>
+```javascript JavaScript
+const token = 'your_jwt_token';
+
+const response = await fetch('/api/solicitudes?page=1&limit=10&id_estado=1', {
+  method: 'GET',
+  headers: {
+    'Authorization': `Bearer ${token}`,
+    'Content-Type': 'application/json'
+  }
+});
+
+const data = await response.json();
+console.log(data);
+```
+
+```python Python
+import requests
+
+token = 'your_jwt_token'
+headers = {
+    'Authorization': f'Bearer {token}',
+    'Content-Type': 'application/json'
+}
+
+params = {
+    'page': 1,
+    'limit': 10,
+    'id_estado': 1
+}
+
+response = requests.get('/api/solicitudes', headers=headers, params=params)
+data = response.json()
+print(data)
+```
+
+```bash cURL
+curl -X GET "/api/solicitudes?page=1&limit=10&id_estado=1" \
+  -H "Authorization: Bearer your_jwt_token" \
+  -H "Content-Type: application/json"
+```
+</CodeGroup>
+
+## Response Example
+
+```json
+{
+  "status": "success",
+  "data": {
+    "solicitudes": [
+      {
+        "id_solicitud": 123,
+        "id_empleado": 45,
+        "id_tipo_solicitud": 1,
+        "id_estado_solicitud": 1,
+        "fecha_inicio": "2026-04-01 00:00:00",
+        "fecha_fin": "2026-04-05 00:00:00",
+        "dias_solicitados": 5,
+        "descripcion_solicitud": "Vacation request for April",
+        "documento_url": null
+      }
+    ],
+    "pagination": {
+      "total": 45,
+      "page": 1,
+      "limit": 10,
+      "totalPages": 5
+    }
+  }
+}
+```
+
+## Error Responses
+
+<ResponseExample>
+```json 403 Forbidden
+{
+  "message": "Tipo de rol (unknown) no soportado."
+}
+```
+
+```json 500 Internal Server Error
+{
+  "message": "Error interno del servidor"
+}
+```
+</ResponseExample>
+
+## Additional Endpoints
+
+<CardGroup cols={2}>
+  <Card title="Get Single Request" icon="file">
+    **GET** `/api/solicitudes/:id`
+    
+    Retrieve detailed information about a specific request. Employees can only view their own requests; admins can view any request.
+  </Card>
+  <Card title="Get Pending Requests" icon="hourglass">
+    **GET** `/api/solicitudes/admin/pendientes`
+    
+    Admin-only endpoint to retrieve all pending requests. Supports the same query parameters as the main endpoint (except `id_estado`).
+  </Card>
+</CardGroup>

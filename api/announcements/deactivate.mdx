@@ -1,0 +1,134 @@
+---
+title: 'Deactivate Announcement'
+api: 'PUT /api/comunicados/admin/:id/desactivar'
+description: 'Deactivate an announcement to hide it from users (Admin only)'
+---
+
+## Overview
+
+This endpoint allows administrators to deactivate (hide) an announcement from regular users. Deactivated announcements will not appear in the active announcements list and cannot be accessed by non-admin users.
+
+<Note>
+  This endpoint requires admin authentication. Only users with admin privileges can deactivate announcements.
+</Note>
+
+<Info>
+  This is a soft delete operation. The announcement remains in the database but is hidden from users. Administrators can reactivate it later using the update endpoint.
+</Info>
+
+## Path Parameters
+
+<ParamField path="id" type="integer" required>
+  The unique identifier of the announcement to deactivate
+</ParamField>
+
+## Response
+
+<ResponseField name="message" type="string">
+  Success message confirming the announcement deactivation
+</ResponseField>
+
+<RequestExample>
+```bash cURL
+curl -X PUT "https://api.example.com/api/comunicados/admin/3/desactivar" \
+  -H "Authorization: Bearer ADMIN_TOKEN"
+```
+
+```javascript JavaScript
+const response = await fetch('https://api.example.com/api/comunicados/admin/3/desactivar', {
+  method: 'PUT',
+  headers: {
+    'Authorization': 'Bearer ADMIN_TOKEN'
+  }
+});
+
+const data = await response.json();
+```
+
+```python Python
+import requests
+
+response = requests.put(
+    'https://api.example.com/api/comunicados/admin/3/desactivar',
+    headers={'Authorization': 'Bearer ADMIN_TOKEN'}
+)
+
+data = response.json()
+```
+
+```go Go
+package main
+
+import (
+    "fmt"
+    "net/http"
+    "io/ioutil"
+)
+
+func main() {
+    client := &http.Client{}
+    req, _ := http.NewRequest("PUT", "https://api.example.com/api/comunicados/admin/3/desactivar", nil)
+    req.Header.Add("Authorization", "Bearer ADMIN_TOKEN")
+    
+    resp, _ := client.Do(req)
+    defer resp.Body.Close()
+    
+    body, _ := ioutil.ReadAll(resp.Body)
+    fmt.Println(string(body))
+}
+```
+</RequestExample>
+
+<ResponseExample>
+```json 200 - Success
+{
+  "message": "Comunicado desactivado exitosamente."
+}
+```
+
+```json 404 - Not Found
+{
+  "message": "Comunicado no encontrado."
+}
+```
+
+```json 500 - Server Error
+{
+  "message": "Error interno del servidor."
+}
+```
+</ResponseExample>
+
+## Behavior
+
+When an announcement is deactivated:
+
+1. The `activo` field is set to `false` in the database
+2. The announcement will no longer appear in the GET `/api/comunicados` endpoint (active announcements list)
+3. Attempts to access it via GET `/api/comunicados/:id` will return a 403 Forbidden error
+4. Admin users can still view and manage the announcement through admin endpoints
+
+## Reactivating an Announcement
+
+To reactivate a deactivated announcement, use the Update Announcement endpoint and set `activo: true` in the request body:
+
+```bash
+curl -X PUT "https://api.example.com/api/comunicados/admin/3" \
+  -H "Authorization: Bearer ADMIN_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"activo": true}'
+```
+
+## Related Endpoints
+
+<CardGroup cols={2}>
+  <Card title="Update Announcement" icon="pen-to-square" href="/api/announcements/update">
+    Update an announcement or reactivate it
+  </Card>
+  <Card title="Create Announcement" icon="plus" href="/api/announcements/create">
+    Create a new announcement
+  </Card>
+  <Card title="Get Active Announcements" icon="list" href="/api/announcements/get-active">
+    View all currently active announcements
+  </Card>
+</CardGroup>

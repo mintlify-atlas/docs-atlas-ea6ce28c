@@ -1,0 +1,200 @@
+---
+title: "Search Employees"
+api: "GET /api/empleados/search"
+description: "Search for active employees by name or ID (Admin only)"
+---
+
+## Overview
+
+This endpoint provides a fast search functionality for finding active employees by name or ID. It's designed for autocomplete interfaces and returns a limited set of results optimized for quick lookups.
+
+<Card title="Admin Access Required" icon="shield-halved">
+  This endpoint requires administrator privileges. Only users with admin role can search for employees.
+</Card>
+
+## Request
+
+```bash
+curl -X GET 'https://api.yourcompany.com/api/empleados/search?q=juan' \
+  -H 'Authorization: Bearer YOUR_ADMIN_JWT_TOKEN'
+```
+
+### Query Parameters
+
+<ParamField query="q" type="string" required>
+  Search query string. Can be used to search by:
+  - Employee name (partial match)
+  - Employee ID (partial match)
+  
+  The search is case-insensitive and uses LIKE pattern matching.
+</ParamField>
+
+### Headers
+
+<ParamField header="Authorization" type="string" required>
+  Bearer token from Azure AD authentication with admin privileges
+</ParamField>
+
+## Response
+
+<ResponseField name="status" type="string">
+  Status of the request. Returns "success" for successful queries.
+</ResponseField>
+
+<ResponseField name="data" type="array">
+  Array of matching employee records (maximum 10 results)
+  <Expandable title="properties">
+    <ResponseField name="id_empleado" type="integer">
+      Unique employee identifier
+    </ResponseField>
+    <ResponseField name="nombre_completo" type="string">
+      Employee's full name (formatted as "nombre apellido")
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+### Response Example
+
+<CodeGroup>
+```json 200 - Success
+{
+  "status": "success",
+  "data": [
+    {
+      "id_empleado": 42,
+      "nombre_completo": "Juan Pérez"
+    },
+    {
+      "id_empleado": 73,
+      "nombre_completo": "Juan Carlos Mendoza"
+    },
+    {
+      "id_empleado": 156,
+      "nombre_completo": "Juana María Torres"
+    }
+  ]
+}
+```
+
+```json 200 - Empty Results
+{
+  "status": "success",
+  "data": []
+}
+```
+
+```json 500 - Server Error
+{
+  "status": "error",
+  "message": "Error al buscar empleados."
+}
+```
+</CodeGroup>
+
+## Search Behavior
+
+<CardGroup cols={2}>
+  <Card title="Active Employees Only" icon="user-check">
+    Only returns employees with active status (`id_estado = 1`)
+  </Card>
+  
+  <Card title="Partial Matching" icon="magnifying-glass">
+    Searches using LIKE pattern with wildcards for flexible matching
+  </Card>
+  
+  <Card title="Result Limit" icon="list-ol">
+    Maximum 10 results returned to prevent performance issues
+  </Card>
+  
+  <Card title="Alphabetical Order" icon="arrow-down-a-z">
+    Results sorted by name in ascending order
+  </Card>
+</CardGroup>
+
+## Search Examples
+
+### Search by Name
+
+```bash
+curl -X GET 'https://api.yourcompany.com/api/empleados/search?q=maria' \
+  -H 'Authorization: Bearer YOUR_ADMIN_JWT_TOKEN'
+```
+
+Finds all active employees whose name contains "maria" (case-insensitive).
+
+### Search by ID
+
+```bash
+curl -X GET 'https://api.yourcompany.com/api/empleados/search?q=42' \
+  -H 'Authorization: Bearer YOUR_ADMIN_JWT_TOKEN'
+```
+
+Finds all active employees whose ID contains "42" (e.g., 42, 142, 420).
+
+### Empty Query
+
+```bash
+curl -X GET 'https://api.yourcompany.com/api/empleados/search?q=' \
+  -H 'Authorization: Bearer YOUR_ADMIN_JWT_TOKEN'
+```
+
+Returns an empty array if the query parameter is empty or contains only whitespace.
+
+## Performance Considerations
+
+<CardGroup cols={2}>
+  <Card title="Indexed Search" icon="gauge-high">
+    Searches on `nombre` and `id_empleado` fields for optimal performance
+  </Card>
+  
+  <Card title="Limited Results" icon="filter">
+    10-result limit prevents database overload in large datasets
+  </Card>
+  
+  <Card title="Status Filter" icon="filter-circle-dollar">
+    Pre-filtering by active status reduces search scope
+  </Card>
+  
+  <Card title="Optimized Query" icon="bolt">
+    Only fetches required fields (`id_empleado`, `nombre`)
+  </Card>
+</CardGroup>
+
+## Use Cases
+
+<CardGroup cols={2}>
+  <Card title="Autocomplete" icon="keyboard">
+    Power typeahead search in admin forms and interfaces
+  </Card>
+  
+  <Card title="Employee Lookup" icon="magnifying-glass">
+    Quick employee ID/name lookup for administrative tasks
+  </Card>
+  
+  <Card title="Request Assignment" icon="user-tag">
+    Search for employees when assigning requests or approvers
+  </Card>
+  
+  <Card title="Report Filtering" icon="filter">
+    Filter reports by specific employees using search
+  </Card>
+</CardGroup>
+
+## Error Handling
+
+<CardGroup cols={2}>
+  <Card title="403 Forbidden" icon="ban">
+    User does not have administrator privileges to search employees
+  </Card>
+  
+  <Card title="500 Internal Error" icon="circle-exclamation">
+    Database connection issues or unexpected server errors during search
+  </Card>
+</CardGroup>
+
+## Security Notes
+
+- **SQL Injection Protection**: Uses Sequelize ORM with parameterized queries
+- **Role-Based Access**: Enforced by `verificarRol(PERMISOS.SOLO_ADMINS)` middleware
+- **Limited Data Exposure**: Only returns `id_empleado` and `nombre_completo` fields
+- **Active Status Filter**: Prevents exposure of inactive/terminated employees

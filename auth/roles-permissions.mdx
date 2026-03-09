@@ -1,0 +1,399 @@
+---
+title: 'Roles & Permissions'
+description: 'Role-based access control (RBAC) implementation in the Portal Self-Service Backend API'
+---
+
+## Overview
+
+The Portal Self-Service Backend API implements role-based access control (RBAC) to restrict access to certain endpoints based on user roles. After JWT authentication, users are assigned roles that determine their permissions.
+
+## Available Roles
+
+The system defines three roles in `src/utils/constants/roles.js:1-5`:
+
+```javascript src/utils/constants/roles.js
+export const ROLES = Object.freeze( {
+    ADMIN: 'RRHH',
+    SUPER_ADMIN: 'Administrador',
+    EMPLEADO : 'Empleado de planta',
+});
+```
+
+<CardGroup cols={3}>
+  <Card title="Empleado de planta" icon="user">
+    **Employee** - Standard user with basic access to personal information and self-service features.
+  </Card>
+  
+  <Card title="RRHH" icon="user-tie">
+    **Admin** - Human Resources staff with elevated permissions to manage employee requests.
+  </Card>
+  
+  <Card title="Administrador" icon="user-shield">
+    **Super Admin** - Full system access with all administrative privileges.
+  </Card>
+</CardGroup>
+
+## Permission Groups
+
+Permissions are organized into reusable groups defined in `src/utils/constants/roles.js:7-10`:
+
+```javascript src/utils/constants/roles.js
+export const PERMISOS = Object.freeze({
+    SOLO_ADMINS: [ROLES.ADMIN, ROLES.SUPER_ADMIN],
+    TODOS: Object.values(ROLES),
+});
+```
+
+### SOLO_ADMINS
+
+Includes both `RRHH` and `Administrador` roles. Used for administrative endpoints that require elevated privileges.
+
+**Use cases:**
+- Approving/rejecting employee requests
+- Viewing all employees' data
+- Managing system-wide settings
+- Accessing admin dashboards
+
+### TODOS
+
+Includes all roles. Used when an endpoint requires authentication but no specific role.
+
+**Use cases:**
+- Endpoints accessible to all authenticated users
+- General information retrieval
+- Personal profile access
+
+## The verificarRol Middleware
+
+The `verificarRol` middleware enforces role-based access control on protected routes.
+
+### Implementation
+
+From `src/middleware/rolMiddleware.js:6-23`:
+
+```javascript src/middleware/rolMiddleware.js
+/**
+ * Verifica si el usuario inyectado tiene uno de los roles permitidos.
+ */
+export const verificarRol = (rolesPermitidos) => {
+    return (req, res, next) => {
+        // Asumir que req.empleado ya fue cargado por el middleware anterior
+        if (!req.empleado || !req.empleado.rol) {
+            return res.status(403).json({ message: 'Rol de usuario no definido.' });
+        }
+
+        const nombreRol = req.empleado.rol.descripcion;
+
+        if (rolesPermitidos.includes(nombreRol)) {
+            next(); // Todo en orden, pasamos al controlador
+        } else {
+            return res.status(403).json({ 
+                message: `Acceso denegado. Rol actual: ${nombreRol}. Requerido: ${rolesPermitidos.join(', ')}` 
+            });
+        }
+    };
+};
+```
+
+### How It Works
+
+<Steps>
+  <Step title="Check User Loading">
+    Verifies that `req.empleado` exists (loaded by the `cargarUsuario` middleware).
+  </Step>
+
+  <Step title="Extract User Role">
+    Gets the role description from `req.empleado.rol.descripcion`.
+  </Step>
+
+  <Step title="Verify Permission">
+    Checks if the user's role is in the `rolesPermitidos` array.
+  </Step>
+
+  <Step title="Grant or Deny Access">
+    - If authorized: calls `next()` to proceed
+    - If unauthorized: returns `403 Forbidden`
+  </Step>
+</Steps>
+
+<Note>
+  The `verificarRol` middleware must be used **after** both `authenticateAndExtract` and `cargarUsuario` middlewares.
+</Note>
+
+## Middleware Chain
+
+Role-based access control requires a specific middleware order:
+
+```javascript
+router.use(authenticateAndExtract);  // 1. Verify JWT token
+router.use(cargarUsuario);           // 2. Load user from database
+router.get('/admin', verificarRol(PERMISOS.SOLO_ADMINS), handler);  // 3. Check role
+```
+
+<Steps>
+  <Step title="authenticateAndExtract">
+    Validates the JWT token and extracts `req.userIdentity` with email and Azure ID.
+  </Step>
+
+  <Step title="cargarUsuario">
+    Queries the database using the Azure ID to load the complete user record into `req.empleado`, including their role.
+  </Step>
+
+  <Step title="verificarRol">
+    Checks if the user's role matches the required permissions for the endpoint.
+  </Step>
+</Steps>
+
+## Usage Examples
+
+### Employee Routes
+
+From `src/routes/empleadoRoutes.js:9-17`:
+
+```javascript src/routes/empleadoRoutes.js
+const router = express.Router();
+router.use(authenticateAndExtract)
+router.use(cargarUsuario);
+
+router.get('/profile', empleadoController.getEmpleado);
+
+router.get('/search', verificarRol(PERMISOS.SOLO_ADMINS), empleadoController.searchEmpleados);
+
+router.get('/:idEmpleado', verificarRol(PERMISOS.SOLO_ADMINS),  empleadoController.getEmpleadoById);
+```
+
+**Access control:**
+- `/profile` - All authenticated users can access their own profile
+- `/search` - Only admins (RRHH or Administrador) can search employees
+- `/:idEmpleado` - Only admins can view other employees' profiles
+
+### Request Routes
+
+From `src/routes/solicitudRoutes.js:10-29`:
+
+```javascript src/routes/solicitudRoutes.js
+router.use(authenticateAndExtract);
+router.use(cargarUsuario);
+
+router.get('/', solicitudController.getSolicitudes);
+router.get('/admin/pendientes', verificarRol(PERMISOS.SOLO_ADMINS), solicitudController.getSolicitudesPendientes);
+
+router.get(
+    '/admin/calendario', 
+    verificarRol(PERMISOS.SOLO_ADMINS),
+    solicitudController.getCalendarioAdmin
+);
+
+router.post('/actualizacion-perfil', solicitudController.solicitarCambioPerfil);
+router.post('/crearSolicitudVacaciones', solicitudController.createSolicitudVacaciones);
+
+router.get('/:id', solicitudController.getSolicitudById);
+router.post('/', solicitudController.createSolicitud);
+router.put('/:id/aprobar', verificarRol(PERMISOS.SOLO_ADMINS), solicitudController.aprobarSolicitud);
+router.put('/:id/rechazar', verificarRol(PERMISOS.SOLO_ADMINS), solicitudController.rechazarSolicitud);
+```
+
+**Access control:**
+- `GET /` - All users can view their own requests
+- `GET /admin/pendientes` - Only admins can view pending requests
+- `GET /admin/calendario` - Only admins can view the admin calendar
+- `POST /actualizacion-perfil` - All users can request profile updates
+- `POST /crearSolicitudVacaciones` - All users can create vacation requests
+- `PUT /:id/aprobar` - Only admins can approve requests
+- `PUT /:id/rechazar` - Only admins can reject requests
+
+### Communication Routes
+
+From `src/routes/comunicadoRoutes.js:11-22`:
+
+```javascript src/routes/comunicadoRoutes.js
+router.use(authenticateAndExtract);
+router.use(cargarUsuario);
+
+// Rutas para gestión de comunicados (solo para ADMIN)
+router.get('/admin',  verificarRol(PERMISOS.SOLO_ADMINS), comunicadoController.getAllComunicadosAdmin);
+router.post('/admin', verificarRol(PERMISOS.SOLO_ADMINS), comunicadoController.createComunicado);
+router.put('/admin/:id', verificarRol(PERMISOS.SOLO_ADMINS),  comunicadoController.updateComunicado);
+router.put('/admin/:id/desactivar', verificarRol(PERMISOS.SOLO_ADMINS), comunicadoController.desactivarComunicado);
+
+// Rutas públicas
+router.get('/', comunicadoController.getComunicadosActivos);// Para los empleados, no muestra los desactivados
+router.get('/:id', comunicadoController.getComunicadoById);
+```
+
+**Access control:**
+- `GET /admin` - Only admins can view all communications (including inactive)
+- `POST /admin` - Only admins can create communications
+- `PUT /admin/:id` - Only admins can update communications
+- `PUT /admin/:id/desactivar` - Only admins can deactivate communications
+- `GET /` - All users can view active communications
+- `GET /:id` - All users can view a specific communication
+
+## Error Responses
+
+### 403 - Forbidden (No Role Defined)
+
+Returned when the user record doesn't have a role:
+
+```json
+{
+  "message": "Rol de usuario no definido."
+}
+```
+
+**Common causes:**
+- User exists in Azure AD but not in the database
+- User record in database is missing role assignment
+- `cargarUsuario` middleware failed to load the user
+
+### 403 - Forbidden (Insufficient Permissions)
+
+Returned when the user's role doesn't match the required permissions:
+
+```json
+{
+  "message": "Acceso denegado. Rol actual: Empleado de planta. Requerido: RRHH, Administrador"
+}
+```
+
+**Common causes:**
+- User attempting to access admin-only endpoint
+- User role was changed but token wasn't refreshed
+- Incorrect role assignment in database
+
+## Implementing Custom Permissions
+
+### Define a New Permission Group
+
+Add to `src/utils/constants/roles.js`:
+
+```javascript src/utils/constants/roles.js
+export const PERMISOS = Object.freeze({
+    SOLO_ADMINS: [ROLES.ADMIN, ROLES.SUPER_ADMIN],
+    SOLO_SUPER_ADMIN: [ROLES.SUPER_ADMIN],
+    TODOS: Object.values(ROLES),
+});
+```
+
+### Use in Routes
+
+```javascript
+import { verificarRol } from '../middleware/rolMiddleware.js';
+import { PERMISOS } from '../utils/constants/roles.js';
+
+router.delete(
+  '/admin/usuarios/:id',
+  verificarRol(PERMISOS.SOLO_SUPER_ADMIN),
+  userController.deleteUser
+);
+```
+
+## Role Assignment
+
+Roles are stored in the database and associated with user records. The `cargarUsuario` middleware loads the user's role from the database.
+
+<Warning>
+  Role assignment is managed in the database, not in Azure AD. Ensure users have the correct role assigned in your user management system.
+</Warning>
+
+### Typical Flow
+
+<Steps>
+  <Step title="User Authentication">
+    User authenticates with Azure AD and receives a JWT token.
+  </Step>
+
+  <Step title="Request to API">
+    User sends request with JWT token to a protected endpoint.
+  </Step>
+
+  <Step title="JWT Verification">
+    `authenticateAndExtract` verifies the token and extracts Azure Object ID.
+  </Step>
+
+  <Step title="Load User from Database">
+    `cargarUsuario` queries the database using Azure Object ID to get the complete user record, including role.
+  </Step>
+
+  <Step title="Role Verification">
+    `verificarRol` checks if the user's role has permission to access the endpoint.
+  </Step>
+
+  <Step title="Execute Handler">
+    If authorized, the route handler executes; otherwise, 403 is returned.
+  </Step>
+</Steps>
+
+## Best Practices
+
+<CardGroup cols={2}>
+  <Card title="Use Permission Constants" icon="code">
+    Always use `PERMISOS` constants instead of hardcoding role arrays for consistency.
+  </Card>
+  
+  <Card title="Principle of Least Privilege" icon="shield-halved">
+    Grant users only the minimum permissions needed for their job function.
+  </Card>
+  
+  <Card title="Middleware Order Matters" icon="arrow-down-1-9">
+    Always apply middlewares in order: authenticate → load user → verify role.
+  </Card>
+  
+  <Card title="Document Role Requirements" icon="book">
+    Clearly document which roles can access which endpoints in your API documentation.
+  </Card>
+</CardGroup>
+
+## Security Considerations
+
+<Warning>
+  **Critical**: Never trust client-side role information. Always verify roles server-side using the `verificarRol` middleware.
+</Warning>
+
+<Info>
+  Role changes take effect immediately upon the next database query by `cargarUsuario`. Users don't need to re-authenticate to receive updated permissions.
+</Info>
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="403 - Rol de usuario no definido">
+    **Possible causes:**
+    - User exists in Azure AD but not in the database
+    - User record doesn't have a role assigned
+    - `cargarUsuario` middleware not executed
+    
+    **Solution:**
+    Ensure the user exists in the database with a valid role assignment.
+  </Accordion>
+
+  <Accordion title="403 - Acceso denegado (even with correct role)">
+    **Possible causes:**
+    - Role name in database doesn't match `ROLES` constants
+    - Case sensitivity mismatch
+    - Extra whitespace in role name
+    
+    **Solution:**
+    Verify the exact role name in the database matches the constants in `roles.js`.
+  </Accordion>
+
+  <Accordion title="Middleware order issues">
+    **Symptom:**
+    `req.empleado` is undefined in `verificarRol`
+    
+    **Solution:**
+    Ensure `cargarUsuario` middleware is applied before `verificarRol`.
+  </Accordion>
+</AccordionGroup>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Azure AD Setup" icon="microsoft" href="/auth/azure-ad-setup">
+    Configure Azure Active Directory authentication
+  </Card>
+  
+  <Card title="JWT Tokens" icon="key" href="/auth/jwt-tokens">
+    Learn about token structure and verification
+  </Card>
+</CardGroup>

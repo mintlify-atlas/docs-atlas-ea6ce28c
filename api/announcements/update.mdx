@@ -1,0 +1,137 @@
+---
+title: 'Update Announcement'
+api: 'PUT /api/comunicados/admin/:id'
+description: 'Update an existing announcement (Admin only)'
+---
+
+## Overview
+
+This endpoint allows administrators to update an existing announcement. Any fields provided in the request body will be updated, while omitted fields will remain unchanged.
+
+<Note>
+  This endpoint requires admin authentication. Only users with admin privileges can update announcements.
+</Note>
+
+## Path Parameters
+
+<ParamField path="id" type="integer" required>
+  The unique identifier of the announcement to update
+</ParamField>
+
+## Request Body
+
+<ParamField body="titulo" type="string" optional>
+  Updated title of the announcement
+</ParamField>
+
+<ParamField body="contenido" type="string" optional>
+  Updated content/body of the announcement
+</ParamField>
+
+<ParamField body="fecha_publicacion" type="string" optional>
+  Updated publication date in ISO 8601 format
+</ParamField>
+
+<ParamField body="activo" type="boolean" optional>
+  Whether the announcement should be active (published)
+</ParamField>
+
+<ParamField body="media_url" type="string" optional>
+  Updated URL to associated media. Can be set to `null` to remove existing media.
+</ParamField>
+
+## Response
+
+<ResponseField name="message" type="string">
+  Success message confirming the announcement update
+</ResponseField>
+
+<RequestExample>
+```bash cURL
+curl -X PUT "https://api.example.com/api/comunicados/admin/3" \
+  -H "Authorization: Bearer ADMIN_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "titulo": "Updated Feature Release",
+    "contenido": "We have released an updated version of the feature with improved performance."
+  }'
+```
+
+```javascript JavaScript
+const response = await fetch('https://api.example.com/api/comunicados/admin/3', {
+  method: 'PUT',
+  headers: {
+    'Authorization': 'Bearer ADMIN_TOKEN',
+    'Content-Type': 'application/json'
+  },
+  body: JSON.stringify({
+    titulo: 'Updated Feature Release',
+    contenido: 'We have released an updated version of the feature with improved performance.'
+  })
+});
+
+const data = await response.json();
+```
+
+```python Python
+import requests
+
+response = requests.put(
+    'https://api.example.com/api/comunicados/admin/3',
+    headers={
+        'Authorization': 'Bearer ADMIN_TOKEN',
+        'Content-Type': 'application/json'
+    },
+    json={
+        'titulo': 'Updated Feature Release',
+        'contenido': 'We have released an updated version of the feature with improved performance.'
+    }
+)
+
+data = response.json()
+```
+</RequestExample>
+
+<ResponseExample>
+```json 200 - Success
+{
+  "message": "Comunicado actualizado exitosamente."
+}
+```
+
+```json 404 - Not Found
+{
+  "message": "Comunicado no encontrado o sin cambios para actualizar."
+}
+```
+
+```json 500 - Server Error
+{
+  "message": "Error interno del servidor al actualizar comunicado."
+}
+```
+</ResponseExample>
+
+## Notes
+
+<Info>
+  Only the fields included in the request body will be updated. You don't need to send all fields - partial updates are supported.
+</Info>
+
+<Warning>
+  If no changes are detected (i.e., the provided data is identical to the existing data), the API will return a 404 status with the message "Comunicado no encontrado o sin cambios para actualizar."
+</Warning>
+
+## Related Endpoints
+
+<CardGroup cols={2}>
+  <Card title="Create Announcement" icon="plus" href="/api/announcements/create">
+    Create a new announcement
+  </Card>
+  <Card title="Deactivate Announcement" icon="eye-slash" href="/api/announcements/deactivate">
+    Deactivate an announcement to hide it from users
+  </Card>
+  <Card title="Get Announcement by ID" icon="file-lines" href="/api/announcements/get-by-id">
+    View the current state of an announcement
+  </Card>
+</CardGroup>

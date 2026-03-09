@@ -1,0 +1,249 @@
+---
+title: "Get Employee by ID"
+api: "GET /api/empleados/:idEmpleado"
+description: "Retrieve a specific employee's profile by their ID (Admin only)"
+---
+
+## Overview
+
+This endpoint allows administrators to retrieve detailed profile information for any employee by their employee ID. It returns the same comprehensive data structure as the profile endpoint, including clinic, role, vacation, and request statistics.
+
+<Card title="Admin Access Required" icon="shield-halved">
+  This endpoint requires administrator privileges. Only users with admin role can access other employees' profiles.
+</Card>
+
+## Request
+
+```bash
+curl -X GET 'https://api.yourcompany.com/api/empleados/42' \
+  -H 'Authorization: Bearer YOUR_ADMIN_JWT_TOKEN'
+```
+
+### Path Parameters
+
+<ParamField path="idEmpleado" type="integer" required>
+  The unique identifier of the employee to retrieve. Must be a valid numeric ID.
+</ParamField>
+
+### Headers
+
+<ParamField header="Authorization" type="string" required>
+  Bearer token from Azure AD authentication with admin privileges
+</ParamField>
+
+## Response
+
+<ResponseField name="id_empleado" type="integer">
+  Unique employee identifier
+</ResponseField>
+
+<ResponseField name="nombre" type="string">
+  Employee's full name
+</ResponseField>
+
+<ResponseField name="DNI" type="string">
+  Employee's national ID number
+</ResponseField>
+
+<ResponseField name="correo" type="string">
+  Employee's email address
+</ResponseField>
+
+<ResponseField name="telefono" type="string">
+  Employee's phone number
+</ResponseField>
+
+<ResponseField name="direccion" type="string">
+  Employee's physical address
+</ResponseField>
+
+<ResponseField name="fecha_ingreso" type="string">
+  Date the employee joined (format: YYYY-MM-DD)
+</ResponseField>
+
+<ResponseField name="fecha_salida" type="string">
+  Date the employee left (null if currently active)
+</ResponseField>
+
+<ResponseField name="puesto" type="string">
+  Employee's job position/title
+</ResponseField>
+
+<ResponseField name="img_perfil" type="string">
+  URL or path to profile image
+</ResponseField>
+
+<ResponseField name="azure_oid" type="string">
+  Azure AD Object ID for integration
+</ResponseField>
+
+<ResponseField name="id_rol" type="integer">
+  Foreign key to employee role
+</ResponseField>
+
+<ResponseField name="id_estado" type="integer">
+  Foreign key to employee status
+</ResponseField>
+
+<ResponseField name="id_clinica" type="integer">
+  Foreign key to assigned clinic
+</ResponseField>
+
+<ResponseField name="id_area" type="integer">
+  Foreign key to department/area
+</ResponseField>
+
+<ResponseField name="total_solicitudes" type="integer">
+  Total number of requests submitted by this employee
+</ResponseField>
+
+<ResponseField name="solicitudes_pendientes" type="integer">
+  Number of pending requests awaiting approval
+</ResponseField>
+
+<ResponseField name="clinica" type="object">
+  <Expandable title="properties">
+    <ResponseField name="nombre_clinica" type="string">
+      Name of the assigned clinic
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+<ResponseField name="estado_empleado" type="object">
+  <Expandable title="properties">
+    <ResponseField name="descripcion" type="string">
+      Employee status description (e.g., "Activo", "Inactivo")
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+<ResponseField name="rol" type="object">
+  <Expandable title="properties">
+    <ResponseField name="descripcion" type="string">
+      Role description (e.g., "Administrador", "Empleado", "Gerente")
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+<ResponseField name="vacaciones" type="array">
+  Array of vacation records for the employee
+  <Expandable title="properties">
+    <ResponseField name="dias_base" type="integer">
+      Base vacation days allocated per period
+    </ResponseField>
+    <ResponseField name="dias_tomados" type="integer">
+      Number of vacation days already taken
+    </ResponseField>
+    <ResponseField name="dias_disponibles" type="integer">
+      Remaining vacation days available
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+### Response Example
+
+<CodeGroup>
+```json 200 - Success
+{
+  "id_empleado": 42,
+  "nombre": "María González",
+  "DNI": "87654321",
+  "correo": "maria.gonzalez@company.com",
+  "telefono": "+51 912345678",
+  "direccion": "Jr. Los Olivos 456, Lima",
+  "fecha_ingreso": "2022-03-10",
+  "fecha_salida": null,
+  "puesto": "Gerente de Operaciones",
+  "img_perfil": "/images/profiles/maria.jpg",
+  "azure_oid": "b2c3d4e5-f6a7-8901-bcde-fa2345678901",
+  "id_rol": 2,
+  "id_estado": 1,
+  "id_clinica": 3,
+  "id_area": 5,
+  "total_solicitudes": 28,
+  "solicitudes_pendientes": 3,
+  "clinica": {
+    "nombre_clinica": "Clínica San Juan"
+  },
+  "estado_empleado": {
+    "descripcion": "Activo"
+  },
+  "rol": {
+    "descripcion": "Gerente"
+  },
+  "vacaciones": [
+    {
+      "dias_base": 25,
+      "dias_tomados": 10,
+      "dias_disponibles": 15
+    }
+  ]
+}
+```
+
+```json 400 - Invalid ID
+{
+  "message": "El ID de empleado no es válido."
+}
+```
+
+```json 404 - Employee Not Found
+{
+  "message": "No se encontró al empleado con ID: 42"
+}
+```
+
+```json 500 - Server Error
+{
+  "message": "Error interno al obtener el perfil del empleado."
+}
+```
+</CodeGroup>
+
+## Error Handling
+
+<CardGroup cols={2}>
+  <Card title="400 Bad Request" icon="triangle-exclamation">
+    The provided employee ID is not a valid number
+  </Card>
+  
+  <Card title="403 Forbidden" icon="ban">
+    User does not have administrator privileges to access this endpoint
+  </Card>
+  
+  <Card title="404 Not Found" icon="magnifying-glass">
+    No employee exists with the specified ID
+  </Card>
+  
+  <Card title="500 Internal Error" icon="circle-exclamation">
+    Database connection issues or unexpected server errors
+  </Card>
+</CardGroup>
+
+## Input Validation
+
+The endpoint performs basic sanitization:
+
+- **ID Validation**: Ensures `idEmpleado` is a numeric value
+- **Type Safety**: Non-numeric values are rejected with a 400 error
+- **SQL Injection Protection**: Uses parameterized queries through Sequelize ORM
+
+## Use Cases
+
+<CardGroup cols={2}>
+  <Card title="Admin Dashboard" icon="chart-line">
+    View detailed employee information in administrative interfaces
+  </Card>
+  
+  <Card title="Request Management" icon="clipboard-check">
+    Access employee details when reviewing their submitted requests
+  </Card>
+  
+  <Card title="HR Operations" icon="users">
+    Manage employee records and track vacation balances
+  </Card>
+  
+  <Card title="Reporting" icon="file-chart-column">
+    Generate reports with comprehensive employee data
+  </Card>
+</CardGroup>

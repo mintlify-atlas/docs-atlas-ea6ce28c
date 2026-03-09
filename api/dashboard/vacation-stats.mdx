@@ -1,0 +1,407 @@
+---
+title: 'Vacation Statistics API'
+description: 'Admin endpoints for vacation analytics and reporting'
+icon: 'chart-line'
+---
+
+## Overview
+
+The Vacation Statistics API provides administrators with comprehensive analytics about employee vacation usage. These endpoints offer aggregated statistics, distribution by department, and detailed employee listings.
+
+<Warning>
+  All endpoints in this section require **Admin** or **RRHH** role permissions.
+</Warning>
+
+## Endpoints
+
+<CardGroup cols={3}>
+  <Card title="Statistics" icon="chart-simple" href="#get-statistics">
+    Get overall vacation statistics
+  </Card>
+  <Card title="Distribution" icon="chart-pie" href="#get-distribution">
+    View vacation distribution by department
+  </Card>
+  <Card title="Employee List" icon="users" href="#get-employee-list">
+    Access detailed employee vacation data
+  </Card>
+</CardGroup>
+
+---
+
+## Get Statistics
+
+<CodeGroup>
+```bash GET /api/vacaciones/admin/stats
+curl -X GET "https://api.example.com/api/vacaciones/admin/stats" \
+  -H "Authorization: Bearer YOUR_TOKEN"
+```
+</CodeGroup>
+
+Retrieves overall vacation statistics including total employees, vacation usage, and pending requests.
+
+### Response
+
+<CodeGroup>
+```json 200 OK
+{
+  "status": "success",
+  "data": {
+    "totalEmpleados": 250,
+    "totalDiasDisponibles": 3500,
+    "totalDiasUsados": 1840,
+    "totalDiasPendientes": 1660,
+    "solicitudesPendientes": 12,
+    "solicitudesAprobadas": 145,
+    "solicitudesRechazadas": 8,
+    "porcentajeUso": 52.57,
+    "promedioVacacionesPorEmpleado": 7.36
+  }
+}
+```
+
+```json 500 Error
+{
+  "status": "error",
+  "message": "Error al obtener estadísticas"
+}
+```
+</CodeGroup>
+
+### Response Fields
+
+<ResponseField name="totalEmpleados" type="integer">
+  Total number of employees in the system
+</ResponseField>
+
+<ResponseField name="totalDiasDisponibles" type="integer">
+  Total vacation days available across all employees
+</ResponseField>
+
+<ResponseField name="totalDiasUsados" type="integer">
+  Total vacation days already used
+</ResponseField>
+
+<ResponseField name="totalDiasPendientes" type="integer">
+  Total vacation days remaining
+</ResponseField>
+
+<ResponseField name="solicitudesPendientes" type="integer">
+  Number of pending vacation requests awaiting approval
+</ResponseField>
+
+<ResponseField name="solicitudesAprobadas" type="integer">
+  Number of approved vacation requests
+</ResponseField>
+
+<ResponseField name="solicitudesRechazadas" type="integer">
+  Number of rejected vacation requests
+</ResponseField>
+
+<ResponseField name="porcentajeUso" type="float">
+  Percentage of total vacation days used
+</ResponseField>
+
+<ResponseField name="promedioVacacionesPorEmpleado" type="float">
+  Average vacation days used per employee
+</ResponseField>
+
+---
+
+## Get Distribution
+
+<CodeGroup>
+```bash GET /api/vacaciones/admin/distribucion
+curl -X GET "https://api.example.com/api/vacaciones/admin/distribucion" \
+  -H "Authorization: Bearer YOUR_TOKEN"
+```
+</CodeGroup>
+
+Retrieves vacation distribution statistics grouped by department/area.
+
+### Response
+
+<CodeGroup>
+```json 200 OK
+{
+  "status": "success",
+  "data": [
+    {
+      "id_area": 1,
+      "nombre_area": "Recursos Humanos",
+      "totalEmpleados": 15,
+      "diasDisponibles": 210,
+      "diasUsados": 98,
+      "diasPendientes": 112,
+      "porcentajeUso": 46.67
+    },
+    {
+      "id_area": 2,
+      "nombre_area": "Tecnología",
+      "totalEmpleados": 45,
+      "diasDisponibles": 630,
+      "diasUsados": 342,
+      "diasPendientes": 288,
+      "porcentajeUso": 54.29
+    },
+    {
+      "id_area": 3,
+      "nombre_area": "Ventas",
+      "totalEmpleados": 60,
+      "diasDisponibles": 840,
+      "diasUsados": 456,
+      "diasPendientes": 384,
+      "porcentajeUso": 54.29
+    },
+    {
+      "id_area": 4,
+      "nombre_area": "Operaciones",
+      "totalEmpleados": 80,
+      "diasDisponibles": 1120,
+      "diasUsados": 623,
+      "diasPendientes": 497,
+      "porcentajeUso": 55.63
+    }
+  ]
+}
+```
+
+```json 500 Error
+{
+  "status": "error",
+  "message": "Error al obtener distribución"
+}
+```
+</CodeGroup>
+
+### Response Fields
+
+Each department object contains:
+
+<ResponseField name="id_area" type="integer">
+  Department/area unique identifier
+</ResponseField>
+
+<ResponseField name="nombre_area" type="string">
+  Department/area name
+</ResponseField>
+
+<ResponseField name="totalEmpleados" type="integer">
+  Number of employees in this department
+</ResponseField>
+
+<ResponseField name="diasDisponibles" type="integer">
+  Total vacation days available for this department
+</ResponseField>
+
+<ResponseField name="diasUsados" type="integer">
+  Total vacation days used by this department
+</ResponseField>
+
+<ResponseField name="diasPendientes" type="integer">
+  Total vacation days remaining for this department
+</ResponseField>
+
+<ResponseField name="porcentajeUso" type="float">
+  Percentage of vacation days used in this department
+</ResponseField>
+
+---
+
+## Get Employee List
+
+<CodeGroup>
+```bash GET /api/vacaciones/admin/listado-global
+curl -X GET "https://api.example.com/api/vacaciones/admin/listado-global?page=1&limit=20&id_area=2&search=John" \
+  -H "Authorization: Bearer YOUR_TOKEN"
+```
+</CodeGroup>
+
+Retrieves a paginated list of employees with their vacation details, with optional filtering.
+
+### Query Parameters
+
+<ParamField query="search" type="string" optional>
+  Search term to filter by employee name or ID
+</ParamField>
+
+<ParamField query="id_clinica" type="integer" optional>
+  Filter by clinic/location ID
+</ParamField>
+
+<ParamField query="id_area" type="integer" optional>
+  Filter by department/area ID
+</ParamField>
+
+<ParamField query="page" type="integer" default="1">
+  Page number for pagination
+</ParamField>
+
+<ParamField query="limit" type="integer" default="10">
+  Number of results per page
+</ParamField>
+
+### Response
+
+<CodeGroup>
+```json 200 OK
+{
+  "status": "success",
+  "data": {
+    "empleados": [
+      {
+        "id_empleado": 42,
+        "nombre": "John Doe",
+        "email": "john.doe@company.com",
+        "id_area": 2,
+        "nombre_area": "Tecnología",
+        "id_clinica": 1,
+        "nombre_clinica": "Sede Central",
+        "diasDisponibles": 14,
+        "diasUsados": 7,
+        "diasPendientes": 7,
+        "solicitudesPendientes": 1,
+        "ultimaSolicitud": "2024-02-28T10:00:00Z"
+      },
+      {
+        "id_empleado": 58,
+        "nombre": "Jane Smith",
+        "email": "jane.smith@company.com",
+        "id_area": 2,
+        "nombre_area": "Tecnología",
+        "id_clinica": 1,
+        "nombre_clinica": "Sede Central",
+        "diasDisponibles": 14,
+        "diasUsados": 10,
+        "diasPendientes": 4,
+        "solicitudesPendientes": 0,
+        "ultimaSolicitud": "2024-01-15T14:30:00Z"
+      }
+    ],
+    "pagination": {
+      "currentPage": 1,
+      "totalPages": 5,
+      "totalRecords": 45,
+      "recordsPerPage": 10
+    }
+  }
+}
+```
+
+```json 500 Error
+{
+  "status": "error",
+  "message": "Error al obtener listado de empleados"
+}
+```
+</CodeGroup>
+
+### Response Structure
+
+<ResponseField name="empleados" type="array">
+  Array of employee vacation data objects
+</ResponseField>
+
+<ResponseField name="pagination" type="object">
+  Pagination metadata
+  <Expandable title="properties">
+    <ResponseField name="currentPage" type="integer">
+      Current page number
+    </ResponseField>
+    <ResponseField name="totalPages" type="integer">
+      Total number of pages
+    </ResponseField>
+    <ResponseField name="totalRecords" type="integer">
+      Total number of employee records
+    </ResponseField>
+    <ResponseField name="recordsPerPage" type="integer">
+      Number of records per page
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+---
+
+## Usage Example
+
+<CodeGroup>
+```javascript JavaScript
+const getVacationStats = async () => {
+  try {
+    // Get overall statistics
+    const statsResponse = await fetch(
+      'https://api.example.com/api/vacaciones/admin/stats',
+      {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      }
+    );
+    const stats = await statsResponse.json();
+    
+    // Get distribution by department
+    const distributionResponse = await fetch(
+      'https://api.example.com/api/vacaciones/admin/distribucion',
+      {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      }
+    );
+    const distribution = await distributionResponse.json();
+    
+    // Get filtered employee list
+    const employeesResponse = await fetch(
+      'https://api.example.com/api/vacaciones/admin/listado-global?id_area=2&page=1&limit=20',
+      {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      }
+    );
+    const employees = await employeesResponse.json();
+    
+    return { stats, distribution, employees };
+  } catch (error) {
+    console.error('Error fetching vacation data:', error);
+  }
+};
+```
+
+```python Python
+import requests
+
+def get_vacation_stats(token):
+    headers = {'Authorization': f'Bearer {token}'}
+    base_url = 'https://api.example.com/api/vacaciones/admin'
+    
+    # Get overall statistics
+    stats_response = requests.get(f'{base_url}/stats', headers=headers)
+    stats = stats_response.json()
+    
+    # Get distribution by department
+    distribution_response = requests.get(f'{base_url}/distribucion', headers=headers)
+    distribution = distribution_response.json()
+    
+    # Get filtered employee list
+    employees_response = requests.get(
+        f'{base_url}/listado-global',
+        params={'id_area': 2, 'page': 1, 'limit': 20},
+        headers=headers
+    )
+    employees = employees_response.json()
+    
+    return {
+        'stats': stats,
+        'distribution': distribution,
+        'employees': employees
+    }
+```
+</CodeGroup>
+
+---
+
+## Implementation Reference
+
+Source files:
+- Routes: `src/routes/vacacionesRoutes.js:15-17`
+- Controller: `src/controllers/vacacionesAdminController.js:3-54`

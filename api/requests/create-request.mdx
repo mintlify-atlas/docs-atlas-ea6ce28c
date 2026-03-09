@@ -1,0 +1,233 @@
+---
+title: 'Create Request'
+api: 'POST /api/solicitudes'
+description: 'Create a general request for absence, permission, or remote work'
+---
+
+## Endpoint
+
+```
+POST /api/solicitudes
+```
+
+This endpoint handles creation of general requests. For vacation requests, use the [dedicated vacation endpoint](/api/requests/vacation-request).
+
+## Supported Request Types
+
+<CardGroup cols={3}>
+  <Card title="Absence" icon="calendar-xmark">
+    Type ID: `3`
+    
+    Report justified absences
+  </Card>
+  <Card title="Permission" icon="clock">
+    Type ID: `2`
+    
+    Request special permissions
+  </Card>
+  <Card title="Remote Work" icon="laptop-house">
+    Type ID: `4`
+    
+    Request to work externally
+  </Card>
+</CardGroup>
+
+## Request Body
+
+<ParamField body="id_tipo_solicitud" type="number" required>
+  Type of request:
+  - `2`: Permission
+  - `3`: Absence
+  - `4`: Remote Work
+  
+  **Note**: Use `1` for vacation via `/api/solicitudes/crearSolicitudVacaciones`
+</ParamField>
+
+<ParamField body="fecha_inicio" type="string" required>
+  Start date in ISO format or YYYY-MM-DD
+  
+  Example: `"2026-04-01"` or `"2026-04-01T08:00:00"`
+</ParamField>
+
+<ParamField body="fecha_fin" type="string" required>
+  End date in ISO format or YYYY-MM-DD
+  
+  Must be equal to or after `fecha_inicio`
+</ParamField>
+
+<ParamField body="descripcion_solicitud" type="string" required>
+  Description or reason for the request
+  
+  Example: `"Medical appointment"`
+</ParamField>
+
+<ParamField body="documento_url" type="string">
+  Optional URL to supporting document (e.g., medical certificate)
+</ParamField>
+
+## Response
+
+<ResponseField name="message" type="string">
+  Success message indicating the request was created
+</ResponseField>
+
+<ResponseField name="solicitud" type="object">
+  <Expandable title="properties">
+    <ResponseField name="id_solicitud" type="number">
+      Unique identifier for the created request
+    </ResponseField>
+    <ResponseField name="id_empleado" type="number">
+      Employee who created the request
+    </ResponseField>
+    <ResponseField name="id_tipo_solicitud" type="number">
+      Type of request (2, 3, or 4)
+    </ResponseField>
+    <ResponseField name="id_estado_solicitud" type="number">
+      Initial state (always `1` for Pending)
+    </ResponseField>
+    <ResponseField name="fecha_inicio" type="string">
+      Start date (YYYY-MM-DD HH:mm:ss)
+    </ResponseField>
+    <ResponseField name="fecha_fin" type="string">
+      End date (YYYY-MM-DD HH:mm:ss)
+    </ResponseField>
+    <ResponseField name="dias_solicitados" type="number">
+      Calculated number of days
+    </ResponseField>
+    <ResponseField name="descripcion_solicitud" type="string">
+      Request description
+    </ResponseField>
+    <ResponseField name="documento_url" type="string">
+      Document URL if provided
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+## Code Examples
+
+<CodeGroup>
+```javascript JavaScript
+const token = 'your_jwt_token';
+
+const requestData = {
+  id_tipo_solicitud: 3,
+  fecha_inicio: '2026-04-10',
+  fecha_fin: '2026-04-10',
+  descripcion_solicitud: 'Medical appointment',
+  documento_url: 'https://example.com/docs/certificate.pdf'
+};
+
+const response = await fetch('/api/solicitudes', {
+  method: 'POST',
+  headers: {
+    'Authorization': `Bearer ${token}`,
+    'Content-Type': 'application/json'
+  },
+  body: JSON.stringify(requestData)
+});
+
+const data = await response.json();
+console.log(data);
+```
+
+```python Python
+import requests
+import json
+
+token = 'your_jwt_token'
+headers = {
+    'Authorization': f'Bearer {token}',
+    'Content-Type': 'application/json'
+}
+
+request_data = {
+    'id_tipo_solicitud': 3,
+    'fecha_inicio': '2026-04-10',
+    'fecha_fin': '2026-04-10',
+    'descripcion_solicitud': 'Medical appointment',
+    'documento_url': 'https://example.com/docs/certificate.pdf'
+}
+
+response = requests.post(
+    '/api/solicitudes',
+    headers=headers,
+    data=json.dumps(request_data)
+)
+data = response.json()
+print(data)
+```
+
+```bash cURL
+curl -X POST "/api/solicitudes" \
+  -H "Authorization: Bearer your_jwt_token" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "id_tipo_solicitud": 3,
+    "fecha_inicio": "2026-04-10",
+    "fecha_fin": "2026-04-10",
+    "descripcion_solicitud": "Medical appointment",
+    "documento_url": "https://example.com/docs/certificate.pdf"
+  }'
+```
+</CodeGroup>
+
+## Response Example
+
+```json 201 Created
+{
+  "message": "Solicitud de 3 creada exitosamente.",
+  "solicitud": {
+    "id_solicitud": 456,
+    "id_empleado": 78,
+    "id_tipo_solicitud": 3,
+    "id_estado_solicitud": 1,
+    "fecha_inicio": "2026-04-10 00:00:00",
+    "fecha_fin": "2026-04-10 00:00:00",
+    "dias_solicitados": 1,
+    "descripcion_solicitud": "Medical appointment",
+    "documento_url": "https://example.com/docs/certificate.pdf"
+  }
+}
+```
+
+## Error Responses
+
+<ResponseExample>
+```json 400 Bad Request - Invalid Type
+{
+  "message": "Tipo de solicitud ID 99 inválido."
+}
+```
+
+```json 400 Bad Request - Unsupported Type
+{
+  "message": "Tipo de solicitud (1) no soportado."
+}
+```
+
+```json 500 Internal Server Error
+{
+  "message": "Error interno del servidor"
+}
+```
+</ResponseExample>
+
+## Notifications
+
+When a request is created, the system automatically sends notifications to all HR administrators (users with Admin role). The notification includes:
+
+- **Title**: "Nueva Solicitud de Permiso"
+- **Message**: Employee name and request type
+- **Type**: `SOLICITUD_NUEVA`
+- **Reference**: The created request ID
+
+## Business Logic
+
+<CardGroup cols={2}>
+  <Card title="Day Calculation" icon="calculator">
+    The system automatically calculates `dias_solicitados` based on the date range, excluding weekends and considering business days.
+  </Card>
+  <Card title="Date Formatting" icon="calendar">
+    All dates are stored in MySQL datetime format (YYYY-MM-DD HH:mm:ss) using dayjs library.
+  </Card>
+</CardGroup>

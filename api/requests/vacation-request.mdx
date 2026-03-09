@@ -1,0 +1,228 @@
+---
+title: 'Create Vacation Request'
+api: 'POST /api/solicitudes/crearSolicitudVacaciones'
+description: 'Create a vacation request with automatic balance validation'
+---
+
+## Endpoint
+
+```
+POST /api/solicitudes/crearSolicitudVacaciones
+```
+
+This endpoint creates vacation requests with automatic validation of available vacation days. The system checks the employee's balance before creating the request.
+
+## Request Body
+
+<ParamField body="fecha_inicio" type="string" required>
+  Vacation start date in ISO format or YYYY-MM-DD
+  
+  Example: `"2026-05-01"` or `"2026-05-01T00:00:00"`
+</ParamField>
+
+<ParamField body="fecha_fin" type="string" required>
+  Vacation end date in ISO format or YYYY-MM-DD
+  
+  Must be equal to or after `fecha_inicio`
+</ParamField>
+
+<ParamField body="descripcion_solicitud" type="string">
+  Optional description for the vacation request
+  
+  Example: `"Summer vacation"`
+</ParamField>
+
+<ParamField body="documento_url" type="string">
+  Optional URL to supporting document
+</ParamField>
+
+## Response
+
+<ResponseField name="message" type="string">
+  Success message: "Solicitud de vacaciones creada exitosamente"
+</ResponseField>
+
+<ResponseField name="solicitud" type="object">
+  <Expandable title="properties">
+    <ResponseField name="id_solicitud" type="number">
+      Unique identifier for the vacation request
+    </ResponseField>
+    <ResponseField name="id_empleado" type="number">
+      Employee who created the request
+    </ResponseField>
+    <ResponseField name="id_tipo_solicitud" type="number">
+      Always `1` for vacation requests
+    </ResponseField>
+    <ResponseField name="id_estado_solicitud" type="number">
+      Initial state (always `1` for Pending)
+    </ResponseField>
+    <ResponseField name="fecha_inicio" type="string">
+      Vacation start date (YYYY-MM-DD HH:mm:ss)
+    </ResponseField>
+    <ResponseField name="fecha_fin" type="string">
+      Vacation end date (YYYY-MM-DD HH:mm:ss)
+    </ResponseField>
+    <ResponseField name="dias_solicitados" type="number">
+      Number of vacation days requested
+    </ResponseField>
+    <ResponseField name="descripcion_solicitud" type="string">
+      Request description
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+## Validation Rules
+
+<CardGroup cols={2}>
+  <Card title="Date Validation" icon="calendar-check">
+    - Start date must be before or equal to end date
+    - Dates cannot be in the past
+    - Date format must be valid
+  </Card>
+  <Card title="Balance Validation" icon="scale-balanced">
+    - System checks employee's available vacation days
+    - Request is rejected if insufficient days available
+    - Balance is only deducted after approval
+  </Card>
+</CardGroup>
+
+## Code Examples
+
+<CodeGroup>
+```javascript JavaScript
+const token = 'your_jwt_token';
+
+const vacationData = {
+  fecha_inicio: '2026-07-01',
+  fecha_fin: '2026-07-14',
+  descripcion_solicitud: 'Summer vacation'
+};
+
+const response = await fetch('/api/solicitudes/crearSolicitudVacaciones', {
+  method: 'POST',
+  headers: {
+    'Authorization': `Bearer ${token}`,
+    'Content-Type': 'application/json'
+  },
+  body: JSON.stringify(vacationData)
+});
+
+const data = await response.json();
+console.log(data);
+```
+
+```python Python
+import requests
+import json
+
+token = 'your_jwt_token'
+headers = {
+    'Authorization': f'Bearer {token}',
+    'Content-Type': 'application/json'
+}
+
+vacation_data = {
+    'fecha_inicio': '2026-07-01',
+    'fecha_fin': '2026-07-14',
+    'descripcion_solicitud': 'Summer vacation'
+}
+
+response = requests.post(
+    '/api/solicitudes/crearSolicitudVacaciones',
+    headers=headers,
+    data=json.dumps(vacation_data)
+)
+data = response.json()
+print(data)
+```
+
+```bash cURL
+curl -X POST "/api/solicitudes/crearSolicitudVacaciones" \
+  -H "Authorization: Bearer your_jwt_token" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "fecha_inicio": "2026-07-01",
+    "fecha_fin": "2026-07-14",
+    "descripcion_solicitud": "Summer vacation"
+  }'
+```
+</CodeGroup>
+
+## Response Example
+
+```json 201 Created
+{
+  "message": "Solicitud de vacaciones creada exitosamente",
+  "solicitud": {
+    "id_solicitud": 789,
+    "id_empleado": 45,
+    "id_tipo_solicitud": 1,
+    "id_estado_solicitud": 1,
+    "fecha_inicio": "2026-07-01 00:00:00",
+    "fecha_fin": "2026-07-14 00:00:00",
+    "dias_solicitados": 10,
+    "descripcion_solicitud": "Summer vacation"
+  }
+}
+```
+
+## Error Responses
+
+<ResponseExample>
+```json 400 Bad Request - Insufficient Days
+{
+  "message": "No tienes suficientes días de vacaciones disponibles. Solicitas 10 días, pero solo tienes 5 días disponibles.",
+  "dias_solicitados": 10
+}
+```
+
+```json 400 Bad Request - Invalid Date Range
+{
+  "message": "La fecha de fin debe ser posterior a la fecha de inicio."
+}
+```
+
+```json 500 Internal Server Error
+{
+  "message": "Error interno del servidor"
+}
+```
+</ResponseExample>
+
+## Business Logic Flow
+
+<Steps>
+  <Step title="Retrieve Employee Balance">
+    System loads the authenticated employee's vacation balance from the database
+  </Step>
+  <Step title="Validate Dates">
+    Checks that dates are valid and in correct order using `validarFechasSolicitud()`
+  </Step>
+  <Step title="Calculate Days">
+    Computes the number of vacation days using `calcularDiasSolicitados()` (excludes weekends)
+  </Step>
+  <Step title="Check Balance">
+    Compares requested days against available balance
+  </Step>
+  <Step title="Create Request">
+    If validation passes, creates the request in pending state
+  </Step>
+  <Step title="Balance Deduction">
+    Days are only deducted from balance when the request is approved (not at creation time)
+  </Step>
+</Steps>
+
+## Related Operations
+
+<CardGroup cols={2}>
+  <Card title="Cancel Vacation" icon="xmark">
+    **PUT** `/api/solicitudes/:id/cancelar`
+    
+    Employees can cancel their own pending vacation requests
+  </Card>
+  <Card title="Approve Vacation" icon="check">
+    **PUT** `/api/solicitudes/:id/aprobar`
+    
+    Admins approve vacation requests, which triggers balance deduction
+  </Card>
+</CardGroup>

@@ -1,0 +1,240 @@
+---
+title: 'Notifications API'
+description: 'Manage user notifications and read status'
+icon: 'bell'
+---
+
+## Overview
+
+The Notifications API allows users to retrieve their personal notifications and mark them as read. All endpoints require authentication and only return notifications for the authenticated user.
+
+## Endpoints
+
+<CardGroup cols={2}>
+  <Card title="Get Notifications" icon="list" href="#get-notifications">
+    Retrieve user's notifications
+  </Card>
+  <Card title="Mark as Read" icon="check" href="#mark-as-read">
+    Mark notifications as read
+  </Card>
+</CardGroup>
+
+---
+
+## Get Notifications
+
+<CodeGroup>
+```bash GET /api/notificaciones
+curl -X GET "https://api.example.com/api/notificaciones?solo_no_leidas=true" \
+  -H "Authorization: Bearer YOUR_TOKEN"
+```
+</CodeGroup>
+
+Retrieves the authenticated user's notifications, with optional filtering for unread notifications only.
+
+### Query Parameters
+
+<ParamField query="solo_no_leidas" type="boolean" optional>
+  Set to `true` to retrieve only unread notifications
+</ParamField>
+
+### Response
+
+<CodeGroup>
+```json 200 OK
+{
+  "success": true,
+  "data": [
+    {
+      "id_notificacion": 45,
+      "id_usuario": 12,
+      "titulo": "Solicitud aprobada",
+      "mensaje": "Tu solicitud de vacaciones ha sido aprobada",
+      "leido": false,
+      "fecha_creacion": "2024-03-08T14:30:00Z",
+      "tipo": {
+        "codigo": "APROBACION",
+        "nombre": "Aprobación de solicitud"
+      },
+      "remitente": {
+        "id_empleado": 5,
+        "nombre": "María García"
+      },
+      "solicitud": {
+        "id_solicitud": 123,
+        "id_tipo_solicitud": 1,
+        "id_estado_solicitud": 2
+      }
+    },
+    {
+      "id_notificacion": 44,
+      "id_usuario": 12,
+      "titulo": "Nuevo documento disponible",
+      "mensaje": "Se ha publicado el manual de procedimientos 2024",
+      "leido": false,
+      "fecha_creacion": "2024-03-07T10:15:00Z",
+      "tipo": {
+        "codigo": "DOCUMENTO",
+        "nombre": "Nuevo documento"
+      },
+      "remitente": {
+        "id_empleado": 1,
+        "nombre": "Administrador Sistema"
+      },
+      "solicitud": null
+    }
+  ]
+}
+```
+
+```json 500 Error
+{
+  "message": "Error interno al obtener notificaciones."
+}
+```
+</CodeGroup>
+
+<Info>
+  The API returns a maximum of 10 recent notifications sorted by creation date (most recent first).
+</Info>
+
+### Notification Structure
+
+Each notification includes:
+
+- **Basic info**: ID, title, message, read status, and creation date
+- **Type**: Notification type code and name (e.g., approval, document, reminder)
+- **Sender**: Employee who triggered the notification (optional)
+- **Request**: Related request information (optional)
+
+---
+
+## Mark as Read
+
+<CodeGroup>
+```bash PUT /api/notificaciones/leer
+curl -X PUT "https://api.example.com/api/notificaciones/leer" \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "ids": [45, 44, 43]
+  }'
+```
+</CodeGroup>
+
+Marks one or more notifications as read for the authenticated user.
+
+### Request Body
+
+<ParamField body="ids" type="array" required>
+  Array of notification IDs to mark as read
+</ParamField>
+
+### Response
+
+<CodeGroup>
+```json 200 OK
+{
+  "success": true,
+  "message": "3 notificaciones marcadas como leídas."
+}
+```
+
+```json 400 Bad Request
+{
+  "message": "Se requiere un array de IDs de notificaciones."
+}
+```
+
+```json 500 Error
+{
+  "message": "Error interno al actualizar notificaciones."
+}
+```
+</CodeGroup>
+
+<Warning>
+  Users can only mark their own notifications as read. The API enforces this security constraint automatically.
+</Warning>
+
+---
+
+## Usage Examples
+
+### Fetch Unread Notifications
+
+<CodeGroup>
+```javascript JavaScript
+const getUnreadNotifications = async () => {
+  const response = await fetch(
+    'https://api.example.com/api/notificaciones?solo_no_leidas=true',
+    {
+      headers: {
+        'Authorization': `Bearer ${token}`
+      }
+    }
+  );
+  const data = await response.json();
+  return data.data;
+};
+```
+
+```python Python
+import requests
+
+def get_unread_notifications(token):
+    response = requests.get(
+        'https://api.example.com/api/notificaciones',
+        params={'solo_no_leidas': 'true'},
+        headers={'Authorization': f'Bearer {token}'}
+    )
+    return response.json()['data']
+```
+</CodeGroup>
+
+### Mark Multiple Notifications as Read
+
+<CodeGroup>
+```javascript JavaScript
+const markAsRead = async (notificationIds) => {
+  const response = await fetch(
+    'https://api.example.com/api/notificaciones/leer',
+    {
+      method: 'PUT',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ ids: notificationIds })
+    }
+  );
+  return response.json();
+};
+
+// Mark notifications 45, 44, and 43 as read
+await markAsRead([45, 44, 43]);
+```
+
+```python Python
+import requests
+
+def mark_as_read(token, notification_ids):
+    response = requests.put(
+        'https://api.example.com/api/notificaciones/leer',
+        json={'ids': notification_ids},
+        headers={'Authorization': f'Bearer {token}'}
+    )
+    return response.json()
+
+# Mark notifications as read
+mark_as_read(token, [45, 44, 43])
+```
+</CodeGroup>
+
+---
+
+## Implementation Reference
+
+Source files:
+- Routes: `src/routes/notificacionRoutes.js:12-13`
+- Controller: `src/controllers/notificacionController.js:8-81`

@@ -1,0 +1,191 @@
+---
+title: 'Azure AD Setup'
+description: 'Configure Azure Active Directory authentication for the Portal Self-Service Backend API'
+---
+
+## Overview
+
+The Portal Self-Service Backend API uses Azure Active Directory (Azure AD) for authentication via JWT tokens. This guide walks through the complete setup process.
+
+## Prerequisites
+
+- An Azure AD tenant
+- Administrative access to Azure Portal
+- Backend API deployed or running locally
+
+## Azure AD App Registration
+
+<Steps>
+  <Step title="Create App Registration">
+    1. Navigate to [Azure Portal](https://portal.azure.com)
+    2. Go to **Azure Active Directory** > **App registrations**
+    3. Click **New registration**
+    4. Enter a name for your API (e.g., "Portal Self-Service Backend API")
+    5. Select **Accounts in this organizational directory only**
+    6. Click **Register**
+  </Step>
+
+  <Step title="Configure API Permissions">
+    1. In your app registration, go to **API permissions**
+    2. Add **Microsoft Graph** delegated permissions:
+       - `User.Read`
+       - `email`
+       - `profile`
+    3. Grant admin consent for your organization
+  </Step>
+
+  <Step title="Expose an API">
+    1. Go to **Expose an API**
+    2. Click **Add an Application ID URI**
+    3. Accept the default value (e.g., `api://<client-id>`) or set a custom URI
+    4. Click **Save**
+    
+    <Note>
+      The Application ID URI will be used as the `AZURE_AUDIENCE` environment variable.
+    </Note>
+  </Step>
+
+  <Step title="Configure Authentication">
+    1. Go to **Authentication**
+    2. Under **Implicit grant and hybrid flows**, ensure tokens are NOT enabled (we use authorization code flow)
+    3. Under **Advanced settings**, set **Allow public client flows** to **No**
+  </Step>
+</Steps>
+
+## Environment Variables
+
+After registering your app in Azure AD, configure the following environment variables in your `.env` file:
+
+```bash .env
+# Azure AD Configuration
+AZURE_ISSUER_BASE_URL=https://login.microsoftonline.com/<tenant-id>/v2.0
+AZURE_AUDIENCE=api://<client-id>
+```
+
+<Info>
+  Replace `<tenant-id>` with your Azure AD tenant ID and `<client-id>` with your application's client ID.
+</Info>
+
+### Finding Your Values
+
+<CardGroup cols={2}>
+  <Card title="Tenant ID" icon="building">
+    Found in Azure Portal under **Azure Active Directory** > **Overview** > **Tenant ID**
+  </Card>
+  
+  <Card title="Client ID" icon="key">
+    Found in your app registration under **Overview** > **Application (client) ID**
+  </Card>
+</CardGroup>
+
+## JWT Verification Process
+
+The API uses the `express-oauth2-jwt-bearer` library to verify JWT tokens issued by Azure AD.
+
+### Authentication Middleware
+
+The base JWT verification is configured in `src/middleware/authMiddleware.js`:
+
+```javascript src/middleware/authMiddleware.js
+import { auth } from 'express-oauth2-jwt-bearer';
+
+// URL base para obtener el documento de metadatos de OpenID Connect (JWKS URI)
+const ISSUER_BASE_URL = process.env.AZURE_ISSUER_BASE_URL; 
+
+// El Application ID URI de tu API Backend registrado en Azure.
+const AUDIENCE = process.env.AZURE_AUDIENCE; 
+
+/**
+ * Middleware de Autorización.
+ * Verifica la validez de un JWT de Entra ID en el header Authorization.
+ */
+const checkJwtBase = auth({
+    // El 'issuer' (emisor) que firmó el token debe ser Microsoft.
+    issuerBaseURL: process.env.AZURE_ISSUER_BASE_URL, 
+    
+    // La 'audience' (audiencia) para la que fue emitido el token debe ser tu API.
+    audience: process.env.AZURE_AUDIENCE,
+});
+```
+
+### How It Works
+
+<Steps>
+  <Step title="Token Validation">
+    The middleware validates the JWT signature using Azure AD's public keys (JWKS).
+  </Step>
+
+  <Step title="Issuer Verification">
+    Verifies the token was issued by Microsoft (`iss` claim matches `AZURE_ISSUER_BASE_URL`).
+  </Step>
+
+  <Step title="Audience Verification">
+    Ensures the token was intended for this API (`aud` claim matches `AZURE_AUDIENCE`).
+  </Step>
+
+  <Step title="Expiration Check">
+    Validates the token hasn't expired (`exp` claim).
+  </Step>
+</Steps>
+
+<Warning>
+  If any validation step fails, the request is rejected with a `401 Unauthorized` response.
+</Warning>
+
+## Testing Your Setup
+
+### 1. Obtain a Token
+
+Use your Azure AD client application to obtain a JWT token with the correct audience.
+
+### 2. Make an Authenticated Request
+
+```bash
+curl -H "Authorization: Bearer <your-jwt-token>" \
+  https://your-api.com/api/empleados/profile
+```
+
+### 3. Verify Token Claims
+
+Successful authentication will extract user information from the token claims:
+
+- `oid` - Azure Object ID (unique user identifier)
+- `upn` or `preferred_username` - User email
+- `name` - User's display name
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="401 - Token inválido, expirado o faltante">
+    **Possible causes:**
+    - Token is expired
+    - Token signature is invalid
+    - Token audience doesn't match `AZURE_AUDIENCE`
+    - Token issuer doesn't match `AZURE_ISSUER_BASE_URL`
+    
+    **Solution:**
+    Verify your environment variables match your Azure AD app registration settings.
+  </Accordion>
+
+  <Accordion title="Token validation takes too long">
+    The first request fetches Azure's public keys (JWKS). Subsequent requests use cached keys.
+    
+    This is normal behavior and improves performance over time.
+  </Accordion>
+
+  <Accordion title="User email not extracted">
+    Ensure your Azure AD token includes the `upn` or `preferred_username` claim. Check your app's token configuration in Azure Portal.
+  </Accordion>
+</AccordionGroup>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="JWT Token Structure" icon="file-code" href="/auth/jwt-tokens">
+    Learn about token claims and the authenticateAndExtract middleware
+  </Card>
+  
+  <Card title="Roles & Permissions" icon="shield" href="/auth/roles-permissions">
+    Configure role-based access control for your API
+  </Card>
+</CardGroup>
