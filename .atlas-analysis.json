@@ -1,0 +1,149 @@
+{
+  "projectType": "api-service",
+  "projectName": "Portal Self-Service Backend API",
+  "projectDescription": "Enterprise employee self-service portal backend with Azure AD authentication, request management, and real-time notifications.",
+  "theme": "palm",
+  "primaryColor": "#0078D4",
+  "lightColor": "#50E6FF",
+  "darkColor": "#005A9E",
+  "navigation": {
+    "tabs": [
+      {
+        "tab": "Documentation",
+        "groups": [
+          {
+            "group": "Get Started",
+            "pages": [
+              "introduction",
+              "quickstart",
+              "architecture"
+            ]
+          },
+          {
+            "group": "Authentication",
+            "pages": [
+              "auth/azure-ad-setup",
+              "auth/jwt-tokens",
+              "auth/roles-permissions"
+            ]
+          },
+          {
+            "group": "Core Concepts",
+            "pages": [
+              "concepts/request-workflow",
+              "concepts/notifications",
+              "concepts/websockets",
+              "concepts/file-uploads"
+            ]
+          },
+          {
+            "group": "Guides",
+            "pages": [
+              "guides/database-setup",
+              "guides/environment-config",
+              "guides/deployment"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "API Reference",
+        "groups": [
+          {
+            "group": "Authentication",
+            "pages": [
+              "api/authentication"
+            ]
+          },
+          {
+            "group": "Employees",
+            "pages": [
+              "api/employees/get-profile",
+              "api/employees/get-by-id",
+              "api/employees/search"
+            ]
+          },
+          {
+            "group": "Requests",
+            "pages": [
+              "api/requests/overview",
+              "api/requests/get-requests",
+              "api/requests/create-request",
+              "api/requests/vacation-request",
+              "api/requests/profile-update",
+              "api/requests/approve-reject",
+              "api/requests/calendar"
+            ]
+          },
+          {
+            "group": "Announcements",
+            "pages": [
+              "api/announcements/get-active",
+              "api/announcements/get-by-id",
+              "api/announcements/create",
+              "api/announcements/update",
+              "api/announcements/deactivate"
+            ]
+          },
+          {
+            "group": "Documents",
+            "pages": [
+              "api/documents/overview"
+            ]
+          },
+          {
+            "group": "FAQ",
+            "pages": [
+              "api/faq/overview"
+            ]
+          },
+          {
+            "group": "Notifications",
+            "pages": [
+              "api/notifications/overview"
+            ]
+          },
+          {
+            "group": "Dashboard",
+            "pages": [
+              "api/dashboard/vacation-stats"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "keyFeatures": [
+    "Microsoft Entra ID (Azure AD) JWT authentication",
+    "Role-based access control (Employee, Admin, Super Admin)",
+    "Request approval workflow for vacations and profile updates",
+    "Real-time notifications via Socket.io WebSockets",
+    "Employee profile and vacation management",
+    "Announcements and documentation system",
+    "Admin dashboard with vacation statistics",
+    "File upload handling with Multer",
+    "MSSQL database integration with Sequelize ORM",
+    "OpenAPI/Swagger documentation"
+  ],
+  "publicApiSurface": [
+    "GET /api/empleados/profile - Get authenticated employee profile",
+    "GET /api/empleados/:idEmpleado - Get employee by ID (Admin only)",
+    "GET /api/empleados/search - Search employees (Admin only)",
+    "GET /api/solicitudes - Get requests for current employee",
+    "POST /api/solicitudes - Create new request",
+    "POST /api/solicitudes/crearSolicitudVacaciones - Create vacation request",
+    "POST /api/solicitudes/actualizacion-perfil - Request profile update",
+    "PUT /api/solicitudes/:id/aprobar - Approve request (Admin only)",
+    "PUT /api/solicitudes/:id/rechazar - Reject request (Admin only)",
+    "GET /api/solicitudes/admin/calendario - Get request calendar (Admin only)",
+    "GET /api/comunicados - Get active announcements",
+    "GET /api/comunicados/:id - Get announcement by ID",
+    "POST /api/comunicados/admin - Create announcement (Admin only)",
+    "PUT /api/comunicados/admin/:id - Update announcement (Admin only)",
+    "GET /api/vacaciones/admin/stats - Get vacation statistics (Admin only)",
+    "GET /api/notificaciones - Get user notifications",
+    "GET /api/dashboard-admin - Get admin dashboard data",
+    "POST /api/uploads - Upload files",
+    "WebSocket /socket.io - Real-time notifications"
+  ]
+}
